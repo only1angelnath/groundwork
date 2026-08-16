@@ -1,0 +1,35 @@
+# Secrets — never commit real env files, only .env.example
+.env
+.env.local
+.env.*.local
+*/.env
+*/.env.local
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+# NOTE: contracts/lib/ (forge-std, openzeppelin-contracts) is intentionally
+# NOT ignored — it was installed with `forge install --no-git` rather than
+# as git submodules, so it needs to be committed directly for the repo to
+# build correctly on a fresh clone (matters for judges checking out the
+# GitHub repo, not just for us).
+
+# Python
+worker/.venv/
+worker/__pycache__/
+worker/**/__pycache__/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# OS / editor
+.DS_Store
+*.swp

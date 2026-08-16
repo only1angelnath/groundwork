@@ -74,4 +74,3 @@ Phase 0 (repo scaffold, toolchain verified) complete. See
 | `backend/` | Render (Web Service) |
 | `frontend/` | Vercel |
 | Database/Auth/Realtime | Supabase |
-# groundwork
