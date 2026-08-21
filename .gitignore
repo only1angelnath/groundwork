@@ -33,3 +33,6 @@ frontend/.turbo/
 # OS / editor
 .DS_Store
 *.swp
+
+# Handoff docs 
+docs/handoff-*.md

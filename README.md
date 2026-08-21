@@ -62,8 +62,11 @@ cd frontend && npm install && npm run dev
 
 ## Status
 
-Phase 0 (repo scaffold, toolchain verified) complete. See
-`docs/build-roadmap.md` for the full phase-by-phase plan.
+Phase 0 (repo scaffold, toolchain verified) and Phase 1 (contracts written,
+tested, deployed, and proven end-to-end on real testnets via manual
+proof-of-concept) both complete. See `docs/build-roadmap.md` for the full
+phase-by-phase plan and `docs/attestcoin-integration.md` for deployed
+addresses and real transaction hashes. Phase 2 (Python worker) is next.
 
 ## Deployment
 

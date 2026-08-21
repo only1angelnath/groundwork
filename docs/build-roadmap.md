@@ -47,19 +47,20 @@ groundwork/
 
 Today is Aug 14; submission deadline is Sept 6, 23:59 ET (~23 days). Plan to have a submittable build by Sept 3 and reserve the last 3 days entirely for the demo video, docs, and buffer — not for new code.
 
-### Phase 0 — Setup (Aug 14–15, ~1 day)
+### Phase 0 — Setup (Aug 14–15, ~1 day) — ✅ DONE
 - Repo scaffolded as above, Foundry initialized, Render/Supabase/Vercel projects created (empty, so env vars and deploy pipelines exist before you need them).
 - Sepolia + Creditcoin CC3 Testnet RPC access confirmed, faucet funds pulled for both a deployer key and a separate relayer key (the relayer is what the worker uses — keep it separate from your personal deployer key).
 - **Definition of done:** you can `forge test` an empty contract and see a Render "hello world" deploy succeed, before writing any real logic.
 
-### Phase 1 — Contracts (Aug 16–20, ~5 days)
+### Phase 1 — Contracts (Aug 16–20, ~5 days) — ✅ DONE
 - `BillPay.sol` on Sepolia — one function, one event, unit tested.
 - `GroundworkASC.sol` — proof verification via the BlockProver precompile. This is the highest-risk, least-familiar piece (Solidity + a precompile you haven't used before) — budget the most slack here, and do a throwaway "verify one proof, print the result" script first before wiring it into `CreditVault`.
 - `CreditVault.sol` — score, collateral ratio, `borrow()`.
 - Deploy both to their respective testnets, verify manually with `cast call` that a hand-submitted proof updates state correctly, before any Python worker exists to automate it.
 - **Definition of done:** you can pay a bill on Sepolia, manually fetch a proof from the Prover REST API with `curl`, manually submit it with `cast send`, and watch the score update on Creditcoin — fully manual, zero automation, but the whole chain proven end-to-end.
+- **Result:** genuinely achieved on real testnets, not simulated. Full addresses, tx hashes, and the real gotchas hit along the way (forge script's `prevrandao` panic on this chain, the `forge create --libraries` linking quirk) are in `docs/attestcoin-integration.md`, which is the canonical record — not duplicated here.
 
-### Phase 2 — Worker (Aug 20–24, ~4 days, overlaps Phase 1's tail)
+### Phase 2 — Worker (Aug 20–24, ~4 days, overlaps Phase 1's tail) — ⬅ NEXT UP
 - `listener.py` — replace your manual "watch for the event" step with a real web3.py filter.
 - `prover_client.py` — replace the `curl` step with `requests`.
 - `submitter.py` — replace the `cast send` step with `web3.py`.
@@ -169,10 +170,10 @@ Frontend ──shows the vault-door-opens climax sequence
 
 ---
 
-## 7. Biggest real risk, named plainly
+## 7. Biggest real risk — resolved in Phase 1
 
-The riskiest unknown in this whole plan is `GroundworkASC.sol`'s call into the BlockProver precompile — it's the one piece neither of us has hands-on experience with yet, and it's on the critical path for literally everything downstream. That's why Phase 1 budgets the most slack and insists on a fully manual proof-of-concept (`curl` + `cast send`) before any automation gets built on top of it — if that precompile call turns out to behave differently than the docs suggest, you want to find out in week one with nothing else depending on it yet, not in week three with the worker, backend, and frontend all already wired to an assumption that was wrong.
+The riskiest unknown in this plan was `GroundworkASC.sol`'s call into the BlockProver precompile — the one piece neither of us had hands-on experience with, and on the critical path for everything downstream. Phase 1's manual proof-of-concept (`curl` + `cast send`, no automation) resolved it: the interface, struct layouts, and precompile address were all confirmed against real published source (`@gluwa/usc-contracts`, `@gluwa/usc-sdk`) rather than guessed, and the full flow — pay a bill, fetch a proof, submit it, watch the score update — was proven on real testnets. See `docs/attestcoin-integration.md` for addresses, tx hashes, and the real engineering gotchas hit along the way.
 
----
+The next risk worth naming for Phase 2: the Python worker needs to replicate this manual flow unattended (listen for events, wait for attestation, fetch proofs, submit them, handle failures/retries) — same principle applies, budget slack for it rather than assuming the manual-to-automated translation is trivial.
 
-Ready to start Phase 0 whenever you are — repo scaffold and `BillPay.sol` first.
+Ready to start Phase 2 whenever you are.

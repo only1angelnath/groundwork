@@ -3,11 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib"]
 solc_version = "0.8.24"
-# svm's default download host (binaries.soliditylang.org) is blocked in this
-# sandbox's network policy, so solc is installed manually and pinned here.
-# On a normal dev machine you can delete this line and let `forge build`
-# auto-download 0.8.24 via svm the standard way.
-solc = "/home/claude/.solc/solc-0.8.24"
+libraries = ["lib/usc-contracts/contracts/decoding/EvmV1Decoder.sol:EvmV1Decoder:0x16b79d87f11883bb57a3d42480804B637e5a2f8D"]
 optimizer = true
 optimizer_runs = 200
 via_ir = false
