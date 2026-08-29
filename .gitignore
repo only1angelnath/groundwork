@@ -17,6 +17,7 @@ contracts/broadcast/*/31337/
 
 # Python
 worker/.venv/
+worker/.env
 worker/__pycache__/
 worker/**/__pycache__/
 backend/.venv/
@@ -33,6 +34,13 @@ frontend/.turbo/
 # OS / editor
 .DS_Store
 *.swp
+deploy.sh
+
 
 # Handoff docs 
 docs/handoff-*.md
+docs/design-system.md.venv/
+__pycache__/
+*.pyc
+worker/last_block.json
+worker/tests/*.log

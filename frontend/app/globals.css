@@ -1,26 +1,58 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Groundwork — light editorial direction, matched to reference */
+  --cream-50: #FDFCFA;
+  --cream-100: #F5F3EF;
+  --cream-200: #EDEAE3;
+  --ink-900: #1A1815;
+  --warmgray-500: #9A9691;
+  --warmgray-300: #C7C3BC;
+  --line-200: #EAE7E0;
+  --brass-500: #C08A2E;
+  --brass-300: #E3C179;
+  --leaf-500: #4C8A5F;
+  --tan-100: #F0E6D2;
+  --tan-200: #E8DCC5;
+  /* Accent extracted from the reference video's corner tiles — a dusty
+     rose/terracotta (sampled ~#876C5C in shadow, brightened for UI use
+     while keeping the same hue family). */
+  --pink-400: #D9998A;
+  --pink-500: #C77E6D;
+  --glass-100: rgba(255, 255, 255, 0.35);
+  --glass-border: rgba(255, 255, 255, 0.5);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-cream-50: var(--cream-50);
+  --color-cream-100: var(--cream-100);
+  --color-cream-200: var(--cream-200);
+  --color-ink-900: var(--ink-900);
+  --color-warmgray-500: var(--warmgray-500);
+  --color-warmgray-300: var(--warmgray-300);
+  --color-line-200: var(--line-200);
+  --color-brass-500: var(--brass-500);
+  --color-brass-300: var(--brass-300);
+  --color-leaf-500: var(--leaf-500);
+  --color-tan-100: var(--tan-100);
+  --color-tan-200: var(--tan-200);
+  --color-pink-400: var(--pink-400);
+  --color-pink-500: var(--pink-500);
+  --color-glass-100: var(--glass-100);
+  --color-glass-border: var(--glass-border);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-data: var(--font-data);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
