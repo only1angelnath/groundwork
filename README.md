@@ -62,18 +62,21 @@ cd frontend && npm install && npm run dev
 
 ## Status
 
-Phase 0 (repo scaffold, toolchain verified) and Phase 1 (contracts written,
-tested, deployed, and proven end-to-end on real testnets via manual
-proof-of-concept) both complete. See `docs/build-roadmap.md` for the full
-phase-by-phase plan and `docs/attestcoin-integration.md` for deployed
-addresses and real transaction hashes. Phase 2 (Python worker) is next.
+Phases 0-4 complete: contracts deployed and verified on real testnets,
+Python worker and FastAPI backend live on Render, frontend rebuilt and
+live on Vercel. **See `docs/HANDOFF.md` for the current critical open
+item** — the frontend has no bill-payment or dashboard UI yet, which
+must be built before this is a demoable product rather than just
+infrastructure. `docs/build-roadmap.md` has the full phase-by-phase plan
+and `docs/attestcoin-integration.md` has deployed addresses and real
+transaction hashes.
 
 ## Deployment
 
 | Component | Platform |
 |---|---|
 | `contracts/` | Sepolia + Creditcoin CC3 Testnet |
-| `worker/` | Render (Background Worker) |
-| `backend/` | Render (Web Service) |
-| `frontend/` | Vercel |
+| `worker/` | Render (Cron Job, every 1 min) |
+| `backend/` | Render (Web Service) — https://groundwork-web-service.onrender.com |
+| `frontend/` | Vercel — https://groundwork-defi.vercel.app |
 | Database/Auth/Realtime | Supabase |
