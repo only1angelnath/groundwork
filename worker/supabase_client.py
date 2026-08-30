@@ -192,3 +192,60 @@ def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bp
                 return
             logger.warning("score_history insert failed (attempt %d/%d): %s — retrying", attempt, max_attempts, exc)
             time.sleep(2 * attempt)
+
+def get_last_scanned_block() -> Optional[int]:
+    """Read the persisted scan cursor from the worker_state table
+    (key='last_scanned_block'). Used by the Render Cron Job deploy path,
+    where each run gets a fresh filesystem and state.py's local file can't
+    survive between invocations. Fails soft to None (caller falls back to
+    state.py's local file, then LISTENER_START_BLOCK) if Supabase is
+    disabled, the table doesn't exist yet, or the row is missing.
+    """
+    if not _ENABLED:
+        return None
+
+    try:
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/worker_state",
+            headers=_headers(),
+            params={"key": "eq.last_scanned_block", "select": "value"},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        if response.status_code == 404:
+            logger.debug("worker_state table not found yet — no remote cursor available")
+            return None
+        response.raise_for_status()
+        rows = response.json()
+        if not rows:
+            return None
+        return int(rows[0]["value"])
+    except (requests.RequestException, KeyError, ValueError, TypeError) as exc:
+        logger.warning("Could not read remote scan cursor (%s) — falling back to local state", exc)
+        return None
+
+
+def set_last_scanned_block(block_number: int) -> None:
+    """Upsert the scan cursor into worker_state, keyed on 'last_scanned_block'.
+    Companion to get_last_scanned_block. Fails soft (logs and returns)
+    since losing this write just means the next Render Cron run re-scans
+    a bit further back, which is safe per bill_events' idempotency check
+    and GroundworkASC's on-chain replay guard.
+    """
+    if not _ENABLED:
+        return
+
+    payload = {"key": "last_scanned_block", "value": block_number}
+    try:
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/worker_state",
+            headers={**_headers(), "Prefer": "resolution=merge-duplicates"},
+            params={"on_conflict": "key"},
+            json=payload,
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        if response.status_code == 404:
+            logger.warning("worker_state table not found yet — skipping remote cursor write")
+            return
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Could not persist remote scan cursor=%d (%s)", block_number, exc)
