@@ -3,7 +3,7 @@ import { TileGridBackground } from "@/components/illustrations/TileGridBackgroun
 export function Hero() {
   return (
     <section className="relative overflow-hidden px-6 pb-6 pt-14 text-center">
-      <div className="relative h-[26rem] sm:h-[30rem]">
+      <div className="relative min-h-[26rem] sm:min-h-[30rem]">
         <TileGridBackground />
 
         <div className="relative z-10">
