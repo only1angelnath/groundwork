@@ -5,6 +5,7 @@ import { Features } from "@/components/sections/Features";
 import { HowItWorks } from "@/components/sections/HowItWorks";
 import { FAQ } from "@/components/sections/FAQ";
 import { Resolution } from "@/components/sections/Resolution";
+import { Dashboard } from "@/components/sections/Dashboard";
 import { Footer } from "@/components/sections/Footer";
 import { Reveal } from "@/components/Reveal";
 
@@ -27,6 +28,9 @@ export default function Home() {
       </Reveal>
       <Reveal>
         <Resolution />
+      </Reveal>
+      <Reveal>
+        <Dashboard />
       </Reveal>
       <Footer />
     </main>
