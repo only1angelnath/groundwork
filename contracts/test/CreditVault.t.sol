@@ -110,4 +110,103 @@ contract CreditVaultTest is Test {
         vm.expectRevert("CreditVault: insufficient pool liquidity");
         vault.borrow{value: requiredCollateral}(1 ether);
     }
+
+    function test_Borrow_RevertsIfExistingLoanNotRepaid() public {
+        vm.deal(address(vault), 10 ether);
+        vm.deal(payer, 10 ether);
+
+        uint256 requiredCollateral = (1 ether * vault.STARTING_COLLATERAL_RATIO_BPS()) / 10_000;
+
+        vm.startPrank(payer);
+        vault.borrow{value: requiredCollateral}(1 ether);
+
+        vm.expectRevert("CreditVault: existing loan must be repaid first");
+        vault.borrow{value: requiredCollateral}(1 ether);
+        vm.stopPrank();
+    }
+
+    function test_Repay_ReturnsCollateralAndClearsLoan() public {
+        vm.deal(address(vault), 10 ether);
+        vm.deal(payer, 10 ether);
+
+        uint256 principal = 1 ether;
+        uint256 requiredCollateral = (principal * vault.STARTING_COLLATERAL_RATIO_BPS()) / 10_000;
+
+        vm.startPrank(payer);
+        vault.borrow{value: requiredCollateral}(principal);
+
+        uint256 balanceAfterBorrow = payer.balance;
+        vault.repay{value: principal}();
+        vm.stopPrank();
+
+        (uint256 loanPrincipal, uint256 loanCollateral) = vault.loanOf(payer);
+        assertEq(loanPrincipal, 0);
+        assertEq(loanCollateral, 0);
+
+        // Repay spends `principal` and gets back `requiredCollateral` -> net zero
+        // round trip with no interest, so balance ends up back at the pre-borrow figure.
+        assertEq(payer.balance, balanceAfterBorrow - principal + requiredCollateral);
+        assertEq(payer.balance, 10 ether);
+    }
+
+    function test_Repay_RevertsWithNoActiveLoan() public {
+        vm.deal(payer, 1 ether);
+
+        vm.prank(payer);
+        vm.expectRevert("CreditVault: no active loan");
+        vault.repay{value: 1 ether}();
+    }
+
+    function test_Repay_RevertsOnInsufficientRepayment() public {
+        vm.deal(address(vault), 10 ether);
+        vm.deal(payer, 10 ether);
+
+        uint256 principal = 1 ether;
+        uint256 requiredCollateral = (principal * vault.STARTING_COLLATERAL_RATIO_BPS()) / 10_000;
+
+        vm.startPrank(payer);
+        vault.borrow{value: requiredCollateral}(principal);
+
+        vm.expectRevert("CreditVault: insufficient repayment");
+        vault.repay{value: principal - 1}();
+        vm.stopPrank();
+    }
+
+    function test_Repay_RefundsExcessPayment() public {
+        vm.deal(address(vault), 10 ether);
+        vm.deal(payer, 10 ether);
+
+        uint256 principal = 1 ether;
+        uint256 requiredCollateral = (principal * vault.STARTING_COLLATERAL_RATIO_BPS()) / 10_000;
+
+        vm.startPrank(payer);
+        vault.borrow{value: requiredCollateral}(principal);
+
+        uint256 balanceAfterBorrow = payer.balance;
+        uint256 overpay = principal + 0.1 ether;
+        vault.repay{value: overpay}();
+        vm.stopPrank();
+
+        // Should get back collateral + the 0.1 ether excess.
+        assertEq(payer.balance, balanceAfterBorrow - overpay + requiredCollateral + 0.1 ether);
+    }
+
+    function test_Repay_AllowsBorrowingAgainAfterward() public {
+        vm.deal(address(vault), 10 ether);
+        vm.deal(payer, 10 ether);
+
+        uint256 principal = 1 ether;
+        uint256 requiredCollateral = (principal * vault.STARTING_COLLATERAL_RATIO_BPS()) / 10_000;
+
+        vm.startPrank(payer);
+        vault.borrow{value: requiredCollateral}(principal);
+        vault.repay{value: principal}();
+
+        // Should not revert this time — the previous loan was cleared.
+        vault.borrow{value: requiredCollateral}(principal);
+        vm.stopPrank();
+
+        (uint256 loanPrincipal,) = vault.loanOf(payer);
+        assertEq(loanPrincipal, principal);
+    }
 }

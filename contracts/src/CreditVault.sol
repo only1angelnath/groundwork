@@ -2,13 +2,19 @@
 pragma solidity ^0.8.23;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title CreditVault
 /// @notice Deployed on Creditcoin. Tracks a payer's verified-payment score and the
 /// collateral ratio required to borrow against it. Only GroundworkASC may record a
-/// verified payment; borrowing itself is always initiated directly by the borrower's
-/// own wallet — the ASC (and the relayer behind it) never touches loan funds, only proofs.
-contract CreditVault is Ownable {
+/// verified payment; borrowing/repaying is always initiated directly by the
+/// borrower's own wallet — the ASC (and the relayer behind it) never touches loan
+/// funds, only proofs.
+///
+/// v2 (Phase 5.5): adds repay() and per-borrower loan tracking. v1 had no way to
+/// reclaim posted collateral once borrow() was called — this version fixes that.
+/// One active loan per address at a time; repay in full to unlock a new borrow.
+contract CreditVault is Ownable, ReentrancyGuard {
     /// @dev Basis points, i.e. 10_000 = 100%.
     uint256 public constant STARTING_COLLATERAL_RATIO_BPS = 30_000; // 300%
     uint256 public constant FLOOR_COLLATERAL_RATIO_BPS = 11_000; // 110%
@@ -21,8 +27,18 @@ contract CreditVault is Ownable {
     mapping(address => uint256) public scoreOf;
     mapping(address => uint256) public collateralRatioOf;
 
+    struct Loan {
+        uint256 principal;
+        uint256 collateral;
+    }
+
+    /// @notice The caller's currently outstanding loan, if any. principal == 0 means
+    /// no active loan.
+    mapping(address => Loan) public loanOf;
+
     event ScoreUpdated(address indexed payer, uint256 newScore, uint256 newCollateralRatioBps);
     event LoanUnlocked(address indexed borrower, uint256 amount, uint256 collateralRatioBps);
+    event LoanRepaid(address indexed borrower, uint256 principal, uint256 collateralReturned);
     event AscSet(address indexed asc);
 
     modifier onlyASC() {
@@ -73,18 +89,41 @@ contract CreditVault is Ownable {
 
     /// @notice Borrow `amount` of native currency, posting collateral according to the
     /// caller's current ratio. Always called directly by the borrower's own wallet.
-    function borrow(uint256 amount) external payable {
+    /// Reverts if the caller already has an active loan — repay it first.
+    function borrow(uint256 amount) external payable nonReentrant {
         require(amount > 0, "CreditVault: amount must be positive");
+        require(loanOf[msg.sender].principal == 0, "CreditVault: existing loan must be repaid first");
 
         uint256 ratioBps = requiredCollateralRatioOf(msg.sender);
         uint256 requiredCollateral = (amount * ratioBps) / 10_000;
         require(msg.value >= requiredCollateral, "CreditVault: insufficient collateral");
         require(address(this).balance - msg.value >= amount, "CreditVault: insufficient pool liquidity");
 
+        loanOf[msg.sender] = Loan({principal: amount, collateral: msg.value});
+
         emit LoanUnlocked(msg.sender, amount, ratioBps);
 
-        (bool sent, ) = msg.sender.call{value: amount}("");
+        (bool sent,) = msg.sender.call{value: amount}("");
         require(sent, "CreditVault: loan transfer failed");
+    }
+
+    /// @notice Repay the caller's active loan in full. Any amount sent above the
+    /// principal is refunded alongside the released collateral. Reverts if there is
+    /// no active loan or the amount sent is less than the principal.
+    function repay() external payable nonReentrant {
+        Loan memory loan = loanOf[msg.sender];
+        require(loan.principal > 0, "CreditVault: no active loan");
+        require(msg.value >= loan.principal, "CreditVault: insufficient repayment");
+
+        delete loanOf[msg.sender];
+
+        uint256 refund = msg.value - loan.principal;
+        uint256 toReturn = loan.collateral + refund;
+
+        emit LoanRepaid(msg.sender, loan.principal, loan.collateral);
+
+        (bool sent,) = msg.sender.call{value: toReturn}("");
+        require(sent, "CreditVault: collateral return failed");
     }
 
     /// @notice Lets anyone (the deployer, for a demo) fund the lending pool.

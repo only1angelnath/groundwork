@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   useAccount,
   useReadContract,
@@ -16,13 +17,16 @@ import {
   BILLPAY_ADDRESS,
   CREDIT_VAULT_ABI,
   CREDIT_VAULT_ADDRESS,
-  DEMO_PAYEE_ADDRESS,
+  DEMO_BILLERS,
   DEMO_BILL_AMOUNT_ETH,
 } from "@/lib/abis";
 
 export function Dashboard() {
   const { address, isConnected } = useAccount();
   const [waitingForAttestation, setWaitingForAttestation] = useState(false);
+  const [selectedBillerLabel, setSelectedBillerLabel] = useState<
+    string | null
+  >(null);
 
   const { data: score, refetch: refetchScore } = useReadContract({
     address: CREDIT_VAULT_ADDRESS,
@@ -95,24 +99,17 @@ export function Dashboard() {
   const scoreDisplay = typeof score === "bigint" ? score.toString() : "-";
   const ratioDisplay = ratioPercent !== null ? ratioPercent + "%" : "-";
 
-  let buttonLabel = "Pay a bill (" + DEMO_BILL_AMOUNT_ETH + " ETH)";
-  if (isPaySending) {
-    buttonLabel = "Confirm in wallet...";
-  } else if (isPayConfirming) {
-    buttonLabel = "Confirming on Sepolia...";
-  }
-
   const txUrl = payTxHash
     ? "https://sepolia.etherscan.io/tx/" + payTxHash
     : null;
 
-  function handlePayBill() {
-    if (!DEMO_PAYEE_ADDRESS) return;
+  function handlePayBill(label: string, billerAddress: `0x${string}`) {
+    setSelectedBillerLabel(label);
     writeContract({
       address: BILLPAY_ADDRESS,
       abi: BILLPAY_ABI,
       functionName: "payBill",
-      args: [DEMO_PAYEE_ADDRESS],
+      args: [billerAddress],
       value: parseEther(DEMO_BILL_AMOUNT_ETH),
       chainId: sepolia.id,
     });
@@ -144,21 +141,37 @@ export function Dashboard() {
         </div>
       </div>
 
-      {!DEMO_PAYEE_ADDRESS && (
-        <p className="max-w-md text-center text-sm text-pink-500">
-          Demo payee address is not configured
-          (NEXT_PUBLIC_DEMO_PAYEE_ADDRESS). The pay-bill button is disabled
-          until it is set.
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-sm text-warmgray-500">
+          Pay a demo bill ({DEMO_BILL_AMOUNT_ETH} ETH on Sepolia)
         </p>
-      )}
-
-      <button
-        onClick={handlePayBill}
-        disabled={!DEMO_PAYEE_ADDRESS || isPaySending || isPayConfirming}
-        className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.04] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {buttonLabel}
-      </button>
+        <div className="flex flex-wrap justify-center gap-3">
+          {DEMO_BILLERS.map((biller) => (
+            <button
+              key={biller.label}
+              onClick={() =>
+                biller.address && handlePayBill(biller.label, biller.address)
+              }
+              disabled={
+                !biller.address || isPaySending || isPayConfirming
+              }
+              className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-6 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.04] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isPaySending && selectedBillerLabel === biller.label
+                ? "Confirm in wallet..."
+                : isPayConfirming && selectedBillerLabel === biller.label
+                  ? "Confirming..."
+                  : "Pay " + biller.label}
+            </button>
+          ))}
+        </div>
+        {DEMO_BILLERS.some((b) => !b.address) && (
+          <p className="max-w-md text-center text-sm text-pink-500">
+            One or more demo biller addresses are not configured
+            (NEXT_PUBLIC_DEMO_PAYEE_ADDRESS / _2).
+          </p>
+        )}
+      </div>
 
       {txUrl && (
         <a
@@ -183,6 +196,13 @@ export function Dashboard() {
           {payError.message}
         </p>
       )}
+
+      <Link
+        href="/borrow"
+        className="mt-2 text-sm text-ink-900 underline decoration-pink-400 underline-offset-4 transition-colors hover:text-pink-500"
+      >
+        Manage your loan &rarr;
+      </Link>
     </section>
   );
 }

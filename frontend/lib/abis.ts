@@ -2,9 +2,13 @@
 // functions from shared/abis/BillPay.json and shared/abis/CreditVault.json.
 // Reason for inlining rather than importing shared/abis directly: Next.js
 // can't cleanly resolve ../shared/abis from outside the frontend/ root
-// without extra webpack config, and contracts are frozen/deployed at this
-// point (docs/HANDOFFphase5.md, step 4). If either contract's ABI ever
-// changes, update shared/abis/*.json AND this file together.
+// without extra webpack config (docs/HANDOFFphase5.md, step 4).
+//
+// CreditVault v2 (Phase 5.5): added repay() and loanOf() after the v1
+// vault turned out to have no way to reclaim posted collateral. Redeployed
+// on Creditcoin CC3 Testnet — GroundworkASC had to be redeployed alongside
+// it since it stores the vault address as immutable. BillPay on Sepolia
+// was untouched.
 
 export const BILLPAY_ABI = [
   {
@@ -31,25 +35,61 @@ export const CREDIT_VAULT_ABI = [
     inputs: [{ name: "payer", type: "address" }],
     outputs: [{ name: "ratioBps", type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "loanOf",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [
+      { name: "principal", type: "uint256" },
+      { name: "collateral", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "borrow",
+    stateMutability: "payable",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "repay",
+    stateMutability: "payable",
+    inputs: [],
+    outputs: [],
+  },
 ] as const;
 
-// Deployed addresses (docs/attestcoin-integration.md). Env vars let you
-// override without a redeploy; fallbacks are the real addresses already
-// live on Sepolia / Creditcoin CC3 Testnet.
+// Deployed addresses. Env vars let you override without a redeploy;
+// fallbacks are the real addresses currently live on Sepolia / Creditcoin
+// CC3 Testnet.
 export const BILLPAY_ADDRESS = (process.env.NEXT_PUBLIC_BILLPAY_ADDRESS ??
   "0xF0572C9E81943374f8A707F6821710D2262E8B22") as `0x${string}`;
 
+// v2 CreditVault (Phase 5.5) — replaces the original v1 address.
 export const CREDIT_VAULT_ADDRESS = (process.env
   .NEXT_PUBLIC_CREDIT_VAULT_ADDRESS ??
-  "0xF0572C9E81943374f8A707F6821710D2262E8B22") as `0x${string}`;
+  "0x21209299B5B21F0f599f19aF5C1a9D8EF96cC74A") as `0x${string}`;
 
-// Demo payee — symbolic for the hackathon demo (docs/HANDOFFphase5.md:
-// "For the demo, payee is symbolic — use a fixed address you already
-// control"). MUST be set before the demo; the Dashboard disables the
-// pay-bill button and shows a warning if this is unset.
-export const DEMO_PAYEE_ADDRESS = process.env.NEXT_PUBLIC_DEMO_PAYEE_ADDRESS as
-  | `0x${string}`
-  | undefined;
+// Demo billers — symbolic addresses labelled as recognizable use cases so
+// the demo reads as a real product rather than one placeholder button.
+// Both point at wallets Angel controls; real biller integration is
+// explicitly out of scope for this hackathon (see FAQ).
+export const DEMO_BILLERS = [
+  {
+    label: "Rent",
+    address: process.env.NEXT_PUBLIC_DEMO_PAYEE_ADDRESS as
+      | `0x${string}`
+      | undefined,
+  },
+  {
+    label: "Electricity",
+    address: process.env.NEXT_PUBLIC_DEMO_PAYEE_ADDRESS_2 as
+      | `0x${string}`
+      | undefined,
+  },
+] as const;
 
 // Fixed demo payment amount, matching the Phase 1 proof-of-concept.
 export const DEMO_BILL_AMOUNT_ETH = "0.001";
