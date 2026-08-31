@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useSwitchChain,
 } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { parseEther } from "viem";
@@ -21,12 +22,19 @@ import {
   DEMO_BILL_AMOUNT_ETH,
 } from "@/lib/abis";
 
+// How long to wait for the Realtime score_history INSERT before giving up
+// and telling the user to check back rather than spinning forever.
+const ATTESTATION_TIMEOUT_MS = 90_000;
+
 export function Dashboard() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
   const [waitingForAttestation, setWaitingForAttestation] = useState(false);
+  const [attestationTimedOut, setAttestationTimedOut] = useState(false);
   const [selectedBillerLabel, setSelectedBillerLabel] = useState<
     string | null
   >(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: score, refetch: refetchScore } = useReadContract({
     address: CREDIT_VAULT_ADDRESS,
@@ -56,10 +64,16 @@ export function Dashboard() {
   const { isLoading: isPayConfirming, isSuccess: isPayConfirmed } =
     useWaitForTransactionReceipt({ hash: payTxHash });
 
+  // Realtime subscription. IMPORTANT: the worker writes wallet_address in
+  // lowercase (worker/supabase_client.py, to match the backend's lowercased
+  // JWT claims) — wagmi's `address` is checksummed mixed-case, and Postgres
+  // string equality is case-sensitive, so this filter silently matched
+  // nothing until it was lowercased here too.
   useEffect(() => {
     if (!address) return;
+    const lowerAddress = address.toLowerCase();
 
-    const channelName = "score_history_" + address;
+    const channelName = "score_history_" + lowerAddress;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -68,12 +82,14 @@ export function Dashboard() {
           event: "INSERT",
           schema: "public",
           table: "score_history",
-          filter: "wallet_address=eq." + address,
+          filter: "wallet_address=eq." + lowerAddress,
         },
         () => {
           refetchScore();
           refetchRatio();
           setWaitingForAttestation(false);
+          setAttestationTimedOut(false);
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
         }
       )
       .subscribe();
@@ -86,7 +102,15 @@ export function Dashboard() {
   useEffect(() => {
     if (isPayConfirmed) {
       setWaitingForAttestation(true);
+      setAttestationTimedOut(false);
+      timeoutRef.current = setTimeout(() => {
+        setWaitingForAttestation(false);
+        setAttestationTimedOut(true);
+      }, ATTESTATION_TIMEOUT_MS);
     }
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [isPayConfirmed]);
 
   if (!isConnected || !address) {
@@ -103,8 +127,12 @@ export function Dashboard() {
     ? "https://sepolia.etherscan.io/tx/" + payTxHash
     : null;
 
-  function handlePayBill(label: string, billerAddress: `0x${string}`) {
+  async function handlePayBill(label: string, billerAddress: `0x${string}`) {
     setSelectedBillerLabel(label);
+    setAttestationTimedOut(false);
+    if (chainId !== sepolia.id) {
+      await switchChainAsync({ chainId: sepolia.id });
+    }
     writeContract({
       address: BILLPAY_ADDRESS,
       abi: BILLPAY_ABI,
@@ -152,9 +180,7 @@ export function Dashboard() {
               onClick={() =>
                 biller.address && handlePayBill(biller.label, biller.address)
               }
-              disabled={
-                !biller.address || isPaySending || isPayConfirming
-              }
+              disabled={!biller.address || isPaySending || isPayConfirming}
               className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-6 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.04] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isPaySending && selectedBillerLabel === biller.label
@@ -165,6 +191,11 @@ export function Dashboard() {
             </button>
           ))}
         </div>
+        <p className="max-w-sm text-center text-xs text-warmgray-300">
+          Symbolic demo billers — the trustless part is the on-chain
+          attestation of the Sepolia payment, not who the wallet belongs to.
+          Real biller integration is out of scope for this build.
+        </p>
         {DEMO_BILLERS.some((b) => !b.address) && (
           <p className="max-w-md text-center text-sm text-pink-500">
             One or more demo biller addresses are not configured
@@ -188,6 +219,14 @@ export function Dashboard() {
         <p className="text-sm text-brass-500">
           Payment confirmed. Waiting for attestation and score update
           (usually under a minute).
+        </p>
+      )}
+
+      {attestationTimedOut && (
+        <p className="max-w-md text-center text-sm text-pink-500">
+          Still waiting on the score update after {ATTESTATION_TIMEOUT_MS / 1000}
+          s — the payment itself succeeded, but the attestation is taking
+          longer than expected. Check back shortly, or refresh.
         </p>
       )}
 

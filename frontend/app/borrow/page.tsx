@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useSwitchChain,
 } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { creditcoinTestnet } from "@/lib/chains";
@@ -15,7 +16,8 @@ import { Nav } from "@/components/sections/Nav";
 import { Footer } from "@/components/sections/Footer";
 
 export default function BorrowPage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
   const [amountInput, setAmountInput] = useState("0.01");
 
   const { data: ratioBps, refetch: refetchRatio } = useReadContract({
@@ -64,7 +66,9 @@ export default function BorrowPage() {
   }, [isBorrowConfirmed, isRepayConfirmed, refetchLoan, refetchRatio]);
 
   const principal = loan ? (loan as readonly [bigint, bigint])[0] : BigInt(0);
-  const collateral = loan ? (loan as readonly [bigint, bigint])[1] : BigInt(0);
+  const collateral = loan
+    ? (loan as readonly [bigint, bigint])[1]
+    : BigInt(0);
   const hasActiveLoan = principal > BigInt(0);
 
   const ratio = typeof ratioBps === "bigint" ? ratioBps : BigInt(30000);
@@ -79,8 +83,15 @@ export default function BorrowPage() {
   const requiredCollateralWei =
     amountWei !== null ? (amountWei * ratio) / BigInt(10000) : null;
 
-  function handleBorrow() {
+  async function ensureCreditcoinChain() {
+    if (chainId !== creditcoinTestnet.id) {
+      await switchChainAsync({ chainId: creditcoinTestnet.id });
+    }
+  }
+
+  async function handleBorrow() {
     if (!requiredCollateralWei || !amountWei) return;
+    await ensureCreditcoinChain();
     writeBorrow({
       address: CREDIT_VAULT_ADDRESS,
       abi: CREDIT_VAULT_ABI,
@@ -91,8 +102,9 @@ export default function BorrowPage() {
     });
   }
 
-  function handleRepay() {
+  async function handleRepay() {
     if (principal === BigInt(0)) return;
+    await ensureCreditcoinChain();
     writeRepay({
       address: CREDIT_VAULT_ADDRESS,
       abi: CREDIT_VAULT_ABI,
