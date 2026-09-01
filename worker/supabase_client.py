@@ -5,7 +5,7 @@ Per docs/build-roadmap.md's interface contract, the worker writes directly
 to Supabase using the service-role key (bypasses RLS by design):
 
     upsert bill_events (sepolia_tx_hash, wallet_address, payee, amount, status)
-    insert score_history (wallet_address, score, collateral_ratio)
+    insert score_history (wallet_address, score, collateral_ratio, creditcoin_tx_hash)
 
 This is also the *real* idempotency guard (state.py's local file is just a
 cheap resume-point optimization — see its docstring). Before processing an
@@ -79,7 +79,6 @@ def is_already_verified(sepolia_tx_hash: str) -> bool:
             timeout=_REQUEST_TIMEOUT_SECONDS,
         )
         if response.status_code == 404:
-            # Table doesn't exist yet (pre-Phase 3) — treat as "not processed".
             logger.debug("bill_events table not found yet — treating as not-processed")
             return False
         response.raise_for_status()
@@ -136,9 +135,11 @@ def upsert_bill_event(
         logger.warning("Could not upsert bill_events for %s (%s)", sepolia_tx_hash, exc)
 
 
-def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bps: int) -> None:
-    """Upsert a row into score_history, keyed on (wallet_address, score) —
-    see supabase/migrations/0002_score_history_dedup.sql. Not strictly
+def insert_score_history(
+    *, wallet_address: str, score: int, collateral_ratio_bps: int, creditcoin_tx_hash: str
+) -> None:
+    """Upsert a row into score_history, keyed on creditcoin_tx_hash — see
+    supabase/migrations/0005b_score_history_txhash_dedup.sql. Not strictly
     required for the core attestation loop to function (CreditVault is the
     source of truth on-chain), but keeps the frontend's Supabase Realtime
     feed (Phase 4) fed without it needing its own indexer.
@@ -147,8 +148,16 @@ def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bp
     client-side timeout doesn't mean the write failed server-side — it may
     have succeeded and the response just didn't arrive in time. A plain
     insert retried after a false-timeout duplicates the row; this upsert
-    is a safe no-op instead. (This is exactly what happened once already,
-    before this fix — see git history / handoff notes.)
+    is a safe no-op instead.
+
+    creditcoin_tx_hash (not wallet_address+score) is the dedup key
+    specifically because score resets to 0 on every CreditVault redeploy —
+    keying on score alone let a wallet's post-redeploy score=3 collide
+    with (and silently overwrite) an unrelated pre-redeploy score=3 row
+    from a completely different contract. This happened once in practice
+    (Phase 5.5's CreditVault redeploy) before this fix. A transaction hash
+    is a genuine 1:1 identity for one verification event, so it needs no
+    assumption about score being monotonic or contract-scoped at all.
 
     Still retries a few times on transient network errors before giving
     up, and still fails soft overall (logs and returns rather than
@@ -164,6 +173,7 @@ def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bp
         # backend/auth.py's lowercased JWT claim for RLS to match anything.
         "score": score,
         "collateral_ratio": collateral_ratio_bps,
+        "creditcoin_tx_hash": creditcoin_tx_hash,
     }
 
     max_attempts = 3
@@ -172,7 +182,7 @@ def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bp
             response = requests.post(
                 f"{SUPABASE_URL}/rest/v1/score_history",
                 headers={**_headers(), "Prefer": "resolution=merge-duplicates"},
-                params={"on_conflict": "wallet_address,score"},
+                params={"on_conflict": "creditcoin_tx_hash"},
                 json=payload,
                 timeout=_REQUEST_TIMEOUT_SECONDS,
             )
@@ -192,6 +202,7 @@ def insert_score_history(*, wallet_address: str, score: int, collateral_ratio_bp
                 return
             logger.warning("score_history insert failed (attempt %d/%d): %s — retrying", attempt, max_attempts, exc)
             time.sleep(2 * attempt)
+
 
 def get_last_scanned_block() -> Optional[int]:
     """Read the persisted scan cursor from the worker_state table

@@ -195,19 +195,28 @@ def process_event(event, billpay_abi: list, creditvault_abi: list, creditcoin_w3
         creditcoin_tx_hash=creditcoin_tx_hash,
     )
 
-    _write_score_history(payer, creditvault_abi, creditcoin_w3)
+    _write_score_history(payer, creditcoin_tx_hash, creditvault_abi, creditcoin_w3)
 
 
-def _write_score_history(payer: str, creditvault_abi: list, creditcoin_w3: Web3) -> None:
+def _write_score_history(payer: str, creditcoin_tx_hash: str, creditvault_abi: list, creditcoin_w3: Web3) -> None:
     """Read the payer's freshly-updated score/ratio straight off CreditVault
     (the source of truth) rather than trusting decoded event data, and mirror
     it into score_history for the frontend's Supabase Realtime feed.
+
+    creditcoin_tx_hash is the dedup key (supabase/migrations/0005_score_history_txhash_dedup.sql)
+    — genuinely unique per verification event, unlike the score value itself
+    which can repeat across a CreditVault redeploy.
     """
     try:
         vault = creditcoin_w3.eth.contract(address=CREDIT_VAULT_ADDRESS, abi=creditvault_abi)
         score = vault.functions.scoreOf(payer).call()
         ratio_bps = vault.functions.requiredCollateralRatioOf(payer).call()
-        insert_score_history(wallet_address=payer, score=score, collateral_ratio_bps=ratio_bps)
+        insert_score_history(
+            wallet_address=payer,
+            score=score,
+            collateral_ratio_bps=ratio_bps,
+            creditcoin_tx_hash=creditcoin_tx_hash,
+        )
     except Exception:
         # score_history is a convenience mirror for the frontend, not the
         # source of truth (CreditVault is) — never let a failure here look
