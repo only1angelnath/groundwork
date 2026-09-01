@@ -54,7 +54,21 @@ class SubmissionError(Exception):
 
 def _load_abi() -> list:
     with open(_ABI_PATH) as f:
-        return json.load(f)
+        loaded = json.load(f)
+    # shared/abis/*.json should be a bare ABI array. Defensively unwrap a
+    # full Forge build artifact (a dict with an "abi" key alongside
+    # bytecode/metadata/etc.) if one ever ends up here by mistake — e.g.
+    # from a `cp contracts/out/.../X.json shared/abis/X.json` that forgot
+    # to extract just the .abi field during a redeploy.
+    if isinstance(loaded, dict) and "abi" in loaded:
+        logger.warning(
+            "%s contains a full build artifact, not a bare ABI array — "
+            "unwrapping .abi defensively. Fix the file to store just the "
+            "array so this warning goes away.",
+            _ABI_PATH,
+        )
+        return loaded["abi"]
+    return loaded
 
 
 def _get_web3() -> Web3:
@@ -132,15 +146,36 @@ def submit_proof(proof: dict) -> str:
     )
 
     signed_tx = relayer_account.sign_transaction(tx)
+    # Computed locally from the signed transaction — no network round-trip
+    # needed, and it's the hash we'll wait on regardless of which branch
+    # below we take.
+    tx_hash = signed_tx.hash
+
     try:
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        w3.eth.send_raw_transaction(signed_tx.raw_transaction)
     except (ValueError, Web3RPCError) as exc:
         if _is_already_processed_error(exc):
             logger.info("Sepolia tx=%s already processed on-chain (caught at broadcast)", source_tx_hash)
             raise AlreadyProcessedError(source_tx_hash) from exc
-        raise SubmissionError(f"Broadcast failed for tx={source_tx_hash}: {exc}") from exc
+        if _is_already_known_error(exc):
+            # The node's mempool already has this exact signed transaction
+            # (identical nonce + data + signature) pending from an earlier
+            # run — the "pending" nonce lookup above didn't see it yet,
+            # which happens on public testnet RPC endpoints when requests
+            # land on different nodes with slightly stale mempool views.
+            # This is not a failure: the transaction is real and already
+            # broadcast. Fall through and wait for ITS receipt instead of
+            # raising, using the hash we already computed locally.
+            logger.info(
+                "Sepolia tx=%s: transaction already broadcast from an earlier "
+                "run (already known), waiting for its receipt: creditcoin_tx=%s",
+                source_tx_hash, tx_hash.hex(),
+            )
+        else:
+            raise SubmissionError(f"Broadcast failed for tx={source_tx_hash}: {exc}") from exc
+    else:
+        logger.info("Submitted, waiting for receipt: creditcoin_tx=%s", tx_hash.hex())
 
-    logger.info("Submitted, waiting for receipt: creditcoin_tx=%s", tx_hash.hex())
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=DEFAULT_RECEIPT_TIMEOUT_SECONDS)
 
     if receipt.status != 1:
@@ -165,3 +200,13 @@ def _is_already_processed_error(exc: Exception) -> bool:
     """
     message = str(exc)
     return "already processed" in message.lower()
+
+
+def _is_already_known_error(exc: Exception) -> bool:
+    """The RPC node's mempool already has this exact signed transaction
+    pending from an earlier run (JSON-RPC error -32603 'already known').
+    This is a duplicate-broadcast race, not a real failure — safe to wait
+    for the existing transaction's receipt instead of giving up.
+    """
+    message = str(exc)
+    return "already known" in message.lower()
