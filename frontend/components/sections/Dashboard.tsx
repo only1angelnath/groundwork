@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   useAccount,
@@ -22,19 +22,26 @@ import {
   DEMO_BILL_AMOUNT_ETH,
 } from "@/lib/abis";
 
-// How long to wait for the Realtime score_history INSERT before giving up
-// and telling the user to check back rather than spinning forever.
-const ATTESTATION_TIMEOUT_MS = 90_000;
+type BillStatus = "pending" | "proof_fetched" | "verified" | "failed";
+
+const STATUS_STEPS: { key: BillStatus; label: string }[] = [
+  { key: "pending", label: "Payment detected on Sepolia" },
+  { key: "proof_fetched", label: "Proof fetched from Attestcoin Prover" },
+  { key: "verified", label: "Verified on Creditcoin, score updated" },
+];
+
+function statusStepIndex(status: BillStatus | null): number {
+  if (!status) return -1;
+  return STATUS_STEPS.findIndex((s) => s.key === status);
+}
 
 export function Dashboard() {
   const { address, isConnected, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
-  const [waitingForAttestation, setWaitingForAttestation] = useState(false);
-  const [attestationTimedOut, setAttestationTimedOut] = useState(false);
   const [selectedBillerLabel, setSelectedBillerLabel] = useState<
     string | null
   >(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [billStatus, setBillStatus] = useState<BillStatus | null>(null);
 
   const { data: score, refetch: refetchScore } = useReadContract({
     address: CREDIT_VAULT_ADDRESS,
@@ -61,25 +68,23 @@ export function Dashboard() {
     error: payError,
   } = useWriteContract();
 
-  const { isLoading: isPayConfirming, isSuccess: isPayConfirmed } =
-    useWaitForTransactionReceipt({ hash: payTxHash });
+  const { isLoading: isPayConfirming } = useWaitForTransactionReceipt({
+    hash: payTxHash,
+  });
 
-  // Realtime subscription. IMPORTANT: the worker writes wallet_address in
-  // lowercase (worker/supabase_client.py, to match the backend's lowercased
-  // JWT claims) — wagmi's `address` is checksummed mixed-case, and Postgres
-  // string equality is case-sensitive, so this filter silently matched
-  // nothing until it was lowercased here too.
+  // Score/ratio Realtime, as before — case-lowered filter (worker writes
+  // wallet_address in lowercase, wagmi's address is checksummed), and
+  // listening for "*" not just "INSERT" since score_history writes are
+  // upserts that can resolve as an UPDATE on a retried event.
   useEffect(() => {
     if (!address) return;
     const lowerAddress = address.toLowerCase();
-
-    const channelName = "score_history_" + lowerAddress;
     const channel = supabase
-      .channel(channelName)
+      .channel("score_history_" + lowerAddress)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "score_history",
           filter: "wallet_address=eq." + lowerAddress,
@@ -87,9 +92,6 @@ export function Dashboard() {
         () => {
           refetchScore();
           refetchRatio();
-          setWaitingForAttestation(false);
-          setAttestationTimedOut(false);
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
         }
       )
       .subscribe();
@@ -99,19 +101,52 @@ export function Dashboard() {
     };
   }, [address, refetchScore, refetchRatio]);
 
+  // Live status tracker for the specific payment just made. Reads the
+  // current bill_events.status for this exact sepolia_tx_hash, then
+  // subscribes for updates as the worker moves it through
+  // pending -> proof_fetched -> verified (or failed). This replaces
+  // guessing how long attestation "usually" takes with showing the real
+  // pipeline stage — attestation latency varies (observed ~15s to several
+  // minutes depending on Prover load), so a fixed timeout was always
+  // going to either fire too early or wait too long.
   useEffect(() => {
-    if (isPayConfirmed) {
-      setWaitingForAttestation(true);
-      setAttestationTimedOut(false);
-      timeoutRef.current = setTimeout(() => {
-        setWaitingForAttestation(false);
-        setAttestationTimedOut(true);
-      }, ATTESTATION_TIMEOUT_MS);
-    }
+    if (!payTxHash) return;
+    setBillStatus(null);
+    let cancelled = false;
+
+    supabase
+      .from("bill_events")
+      .select("status")
+      .eq("sepolia_tx_hash", payTxHash)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.status) {
+          setBillStatus(data.status as BillStatus);
+        }
+      });
+
+    const channel = supabase
+      .channel("bill_events_" + payTxHash)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bill_events",
+          filter: "sepolia_tx_hash=eq." + payTxHash,
+        },
+        (payload) => {
+          const row = payload.new as { status?: string } | undefined;
+          if (row?.status) setBillStatus(row.status as BillStatus);
+        }
+      )
+      .subscribe();
+
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      cancelled = true;
+      supabase.removeChannel(channel);
     };
-  }, [isPayConfirmed]);
+  }, [payTxHash]);
 
   if (!isConnected || !address) {
     return null;
@@ -127,9 +162,11 @@ export function Dashboard() {
     ? "https://sepolia.etherscan.io/tx/" + payTxHash
     : null;
 
+  const currentStepIndex = statusStepIndex(billStatus);
+  const showTracker = payTxHash && billStatus !== null && billStatus !== "verified";
+
   async function handlePayBill(label: string, billerAddress: `0x${string}`) {
     setSelectedBillerLabel(label);
-    setAttestationTimedOut(false);
     if (chainId !== sepolia.id) {
       await switchChainAsync({ chainId: sepolia.id });
     }
@@ -215,19 +252,40 @@ export function Dashboard() {
         </a>
       )}
 
-      {waitingForAttestation && (
-        <p className="text-sm text-brass-500">
-          Payment confirmed. Waiting for attestation and score update
-          (usually under a minute).
-        </p>
-      )}
-
-      {attestationTimedOut && (
-        <p className="max-w-md text-center text-sm text-pink-500">
-          Still waiting on the score update after {ATTESTATION_TIMEOUT_MS / 1000}
-          s — the payment itself succeeded, but the attestation is taking
-          longer than expected. Check back shortly, or refresh.
-        </p>
+      {showTracker && (
+        <div className="w-full max-w-sm rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
+          <p className="mb-4 text-center text-sm text-warmgray-500">
+            {billStatus === "failed"
+              ? "Attestation hit a snag — the worker retries automatically."
+              : "Tracking your payment through attestation"}
+          </p>
+          <ol className="space-y-3">
+            {STATUS_STEPS.map((step, i) => {
+              const done = billStatus === "failed" ? false : i <= currentStepIndex;
+              return (
+                <li key={step.key} className="flex items-center gap-3">
+                  <span
+                    className={
+                      "flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-xs " +
+                      (done
+                        ? "bg-leaf-500 text-white"
+                        : "border border-line-200 text-warmgray-300")
+                    }
+                  >
+                    {done ? "\u2713" : i + 1}
+                  </span>
+                  <span
+                    className={
+                      "text-sm " + (done ? "text-ink-900" : "text-warmgray-500")
+                    }
+                  >
+                    {step.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
       )}
 
       {payError && (

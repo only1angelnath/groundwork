@@ -93,3 +93,17 @@ export const DEMO_BILLERS = [
 
 // Fixed demo payment amount, matching the Phase 1 proof-of-concept.
 export const DEMO_BILL_AMOUNT_ETH = "0.001";
+
+// Maps a known demo biller address back to its friendly label for display
+// in the payment history / status tracker. Falls back to a truncated
+// address for anything else (shouldn't normally happen, since payee is
+// always one of DEMO_BILLERS today, but this keeps the UI safe if that
+// ever changes).
+export function getBillerLabel(address: string): string {
+  const lower = address.toLowerCase();
+  const match = DEMO_BILLERS.find(
+    (b) => b.address && b.address.toLowerCase() === lower
+  );
+  if (match) return match.label;
+  return address.slice(0, 6) + "..." + address.slice(-4);
+}
