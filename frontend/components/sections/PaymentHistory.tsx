@@ -39,14 +39,28 @@ function formatWhen(iso: string): string {
   });
 }
 
+function SkeletonRow() {
+  return (
+    <div className="flex animate-pulse items-center justify-between gap-4 border-b border-line-200 px-6 py-4 last:border-b-0">
+      <div className="flex flex-col gap-2">
+        <div className="h-3 w-16 rounded bg-line-200" />
+        <div className="h-2 w-24 rounded bg-line-200" />
+      </div>
+      <div className="h-3 w-32 rounded bg-line-200" />
+    </div>
+  );
+}
+
 export function PaymentHistory() {
   const { address, isConnected } = useAccount();
   const [events, setEvents] = useState<BillEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!address) return;
     const lowerAddress = address.toLowerCase();
     let cancelled = false;
+    setIsLoading(true);
 
     supabase
       .from("bill_events")
@@ -57,7 +71,9 @@ export function PaymentHistory() {
       .order("created_at", { ascending: false })
       .limit(20)
       .then(({ data }) => {
-        if (!cancelled && data) setEvents(data as BillEvent[]);
+        if (cancelled) return;
+        if (data) setEvents(data as BillEvent[]);
+        setIsLoading(false);
       });
 
     const channel = supabase
@@ -104,7 +120,13 @@ export function PaymentHistory() {
         <span className="font-normal italic text-warmgray-500">history</span>
       </h2>
 
-      {events.length === 0 ? (
+      {isLoading ? (
+        <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-glass-border bg-glass-100 backdrop-blur-md">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
+      ) : events.length === 0 ? (
         <p className="text-sm text-warmgray-500">
           No payments yet — pay a demo bill above to see it here.
         </p>

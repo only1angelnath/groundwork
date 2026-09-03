@@ -43,7 +43,11 @@ export function Dashboard() {
   >(null);
   const [billStatus, setBillStatus] = useState<BillStatus | null>(null);
 
-  const { data: score, refetch: refetchScore } = useReadContract({
+  const {
+    data: score,
+    refetch: refetchScore,
+    isLoading: isScoreLoading,
+  } = useReadContract({
     address: CREDIT_VAULT_ADDRESS,
     abi: CREDIT_VAULT_ABI,
     functionName: "scoreOf",
@@ -52,7 +56,11 @@ export function Dashboard() {
     query: { enabled: isConnected && !!address },
   });
 
-  const { data: ratioBps, refetch: refetchRatio } = useReadContract({
+  const {
+    data: ratioBps,
+    refetch: refetchRatio,
+    isLoading: isRatioLoading,
+  } = useReadContract({
     address: CREDIT_VAULT_ADDRESS,
     abi: CREDIT_VAULT_ABI,
     functionName: "requiredCollateralRatioOf",
@@ -72,10 +80,6 @@ export function Dashboard() {
     hash: payTxHash,
   });
 
-  // Score/ratio Realtime, as before — case-lowered filter (worker writes
-  // wallet_address in lowercase, wagmi's address is checksummed), and
-  // listening for "*" not just "INSERT" since score_history writes are
-  // upserts that can resolve as an UPDATE on a retried event.
   useEffect(() => {
     if (!address) return;
     const lowerAddress = address.toLowerCase();
@@ -101,14 +105,6 @@ export function Dashboard() {
     };
   }, [address, refetchScore, refetchRatio]);
 
-  // Live status tracker for the specific payment just made. Reads the
-  // current bill_events.status for this exact sepolia_tx_hash, then
-  // subscribes for updates as the worker moves it through
-  // pending -> proof_fetched -> verified (or failed). This replaces
-  // guessing how long attestation "usually" takes with showing the real
-  // pipeline stage — attestation latency varies (observed ~15s to several
-  // minutes depending on Prover load), so a fixed timeout was always
-  // going to either fire too early or wait too long.
   useEffect(() => {
     if (!payTxHash) return;
     setBillStatus(null);
@@ -155,9 +151,6 @@ export function Dashboard() {
   const ratioPercent =
     typeof ratioBps === "bigint" ? Number(ratioBps) / 100 : null;
 
-  const scoreDisplay = typeof score === "bigint" ? score.toString() : "-";
-  const ratioDisplay = ratioPercent !== null ? ratioPercent + "%" : "-";
-
   const txUrl = payTxHash
     ? "https://sepolia.etherscan.io/tx/" + payTxHash
     : null;
@@ -192,17 +185,25 @@ export function Dashboard() {
       <div className="grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md transition hover:scale-[1.02]">
           <p className="text-sm text-warmgray-500">Verified payments</p>
-          <p className="font-[family-name:var(--font-data)] text-3xl text-ink-900">
-            {scoreDisplay}
-          </p>
+          {isScoreLoading ? (
+            <div className="mt-2 h-9 w-16 animate-pulse rounded bg-line-200" />
+          ) : (
+            <p className="font-[family-name:var(--font-data)] text-3xl text-ink-900">
+              {typeof score === "bigint" ? score.toString() : "-"}
+            </p>
+          )}
         </div>
         <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md transition hover:scale-[1.02]">
           <p className="text-sm text-warmgray-500">
             Required collateral ratio
           </p>
-          <p className="font-[family-name:var(--font-data)] text-3xl text-brass-500">
-            {ratioDisplay}
-          </p>
+          {isRatioLoading ? (
+            <div className="mt-2 h-9 w-20 animate-pulse rounded bg-line-200" />
+          ) : (
+            <p className="font-[family-name:var(--font-data)] text-3xl text-brass-500">
+              {ratioPercent !== null ? ratioPercent + "%" : "-"}
+            </p>
+          )}
         </div>
       </div>
 
@@ -220,11 +221,19 @@ export function Dashboard() {
               disabled={!biller.address || isPaySending || isPayConfirming}
               className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-6 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.04] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isPaySending && selectedBillerLabel === biller.label
-                ? "Confirm in wallet..."
-                : isPayConfirming && selectedBillerLabel === biller.label
-                  ? "Confirming..."
-                  : "Pay " + biller.label}
+              {isPaySending && selectedBillerLabel === biller.label ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Confirm in wallet...
+                </span>
+              ) : isPayConfirming && selectedBillerLabel === biller.label ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Confirming...
+                </span>
+              ) : (
+                "Pay " + biller.label
+              )}
             </button>
           ))}
         </div>
@@ -254,7 +263,10 @@ export function Dashboard() {
 
       {showTracker && (
         <div className="w-full max-w-sm rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
-          <p className="mb-4 text-center text-sm text-warmgray-500">
+          <p className="mb-4 flex items-center justify-center gap-2 text-center text-sm text-warmgray-500">
+            {billStatus !== "failed" && (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-brass-500 border-t-transparent" />
+            )}
             {billStatus === "failed"
               ? "Attestation hit a snag — the worker retries automatically."
               : "Tracking your payment through attestation"}

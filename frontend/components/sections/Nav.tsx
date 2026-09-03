@@ -1,34 +1,41 @@
+import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
 export function Nav() {
   return (
     <div className="sticky top-4 z-50 mx-auto w-full max-w-5xl px-4">
       <header className="flex items-center justify-between rounded-full border border-glass-border bg-glass-100 px-4 py-2.5 shadow-sm backdrop-blur-xl">
-        <a href="#" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <Logo size={30} />
           <span className="font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-ink-900">
             groundwork
           </span>
-        </a>
+        </Link>
 
         <nav className="hidden gap-8 text-xs font-medium uppercase tracking-wide text-warmgray-500 sm:flex">
-          <a href="#benefits" className="transition hover:text-ink-900">
+          <Link href="/#benefits" className="transition hover:text-ink-900">
             Benefits
-          </a>
-          <a href="#how-it-works" className="transition hover:text-ink-900">
+          </Link>
+          <Link
+            href="/#how-it-works"
+            className="transition hover:text-ink-900"
+          >
             How it Works
-          </a>
-          <a href="#faq" className="transition hover:text-ink-900">
+          </Link>
+          <Link href="/#faq" className="transition hover:text-ink-900">
             FAQ
-          </a>
+          </Link>
+          <Link href="/dashboard" className="transition hover:text-ink-900">
+            Dashboard
+          </Link>
         </nav>
 
-        <a
-          href="#connect"
+        <Link
+          href="/#connect"
           className="rounded-full bg-gradient-to-b from-pink-400 to-pink-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:scale-105 hover:shadow-md"
         >
           Get Started
-        </a>
+        </Link>
       </header>
     </div>
   );

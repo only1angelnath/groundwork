@@ -131,6 +131,11 @@ export default function BorrowPage() {
             Post collateral based on your payment history, borrow instantly,
             and repay whenever you like to reclaim your collateral in full.
           </p>
+          <p className="mt-2 max-w-md text-xs text-warmgray-300">
+            Borrowing happens natively in tCTC on Creditcoin — a different
+            chain and currency from the ETH bill payments that build your
+            score on Sepolia, bridged trustlessly by Attestcoin Protocol.
+          </p>
         </div>
 
         {!isConnected && (
@@ -157,10 +162,10 @@ export default function BorrowPage() {
               <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
                 <p className="text-sm text-warmgray-500">Active loan</p>
                 <p className="font-[family-name:var(--font-data)] text-2xl text-ink-900">
-                  {formatEther(principal)} ETH borrowed
+                  {formatEther(principal)} tCTC borrowed
                 </p>
                 <p className="mt-1 font-[family-name:var(--font-data)] text-sm text-warmgray-500">
-                  {formatEther(collateral)} ETH collateral locked
+                  {formatEther(collateral)} tCTC collateral locked
                 </p>
 
                 <button
@@ -172,7 +177,7 @@ export default function BorrowPage() {
                     ? "Confirm in wallet..."
                     : isRepayConfirming
                       ? "Confirming..."
-                      : "Repay " + formatEther(principal) + " ETH"}
+                      : "Repay " + formatEther(principal) + " tCTC"}
                 </button>
 
                 {repayTxHash && (
@@ -204,7 +209,7 @@ export default function BorrowPage() {
             ) : (
               <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
                 <label className="text-sm text-warmgray-500">
-                  Amount to borrow (ETH)
+                  Amount to borrow (tCTC)
                 </label>
                 <input
                   type="text"
@@ -217,7 +222,7 @@ export default function BorrowPage() {
                   <p className="mt-3 text-sm text-warmgray-500">
                     Requires{" "}
                     <span className="font-[family-name:var(--font-data)] text-ink-900">
-                      {formatEther(requiredCollateralWei)} ETH
+                      {formatEther(requiredCollateralWei)} tCTC
                     </span>{" "}
                     collateral at your current {ratioPercent}% ratio.
                   </p>
