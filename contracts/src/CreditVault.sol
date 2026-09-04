@@ -6,23 +6,28 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /// @title CreditVault
 /// @notice Deployed on Creditcoin. Tracks a payer's verified-payment score and the
-/// collateral ratio required to borrow against it. Only GroundworkASC may record a
-/// verified payment; borrowing/repaying is always initiated directly by the
-/// borrower's own wallet — the ASC (and the relayer behind it) never touches loan
-/// funds, only proofs.
+/// collateral ratio required to borrow against it. Verified payments can be recorded
+/// by any address in the authorized recorder set — GroundworkASC for on-chain,
+/// Attestcoin-verified payments, plus one or more permissioned validators for the
+/// upload-approval path (Phase 6). Borrowing/repaying is always initiated directly by
+/// the borrower's own wallet — no recorder ever touches loan funds, only score.
 ///
-/// v2 (Phase 5.5): adds repay() and per-borrower loan tracking. v1 had no way to
-/// reclaim posted collateral once borrow() was called — this version fixes that.
-/// One active loan per address at a time; repay in full to unlock a new borrow.
+/// v3 (Phase 6): replaced the single `asc` address + one-time setASC() with a
+/// recorder set (isRecorder mapping + addRecorder/removeRecorder), since bill
+/// approvals now come from more than one source — GroundworkASC plus a small
+/// permissioned set of validators. Deliberately agnostic inside
+/// recordVerifiedPayment to *which* recorder called it; a verified payment is a
+/// verified payment regardless of path. v2's repay()/loan-tracking logic is
+/// unchanged.
 contract CreditVault is Ownable, ReentrancyGuard {
     /// @dev Basis points, i.e. 10_000 = 100%.
     uint256 public constant STARTING_COLLATERAL_RATIO_BPS = 30_000; // 300%
     uint256 public constant FLOOR_COLLATERAL_RATIO_BPS = 11_000; // 110%
     uint256 public constant STEP_DOWN_BPS = 2_000; // -20 points per verified payment
 
-    /// @notice The GroundworkASC contract. Set once after deploy to avoid a
-    /// constructor-ordering chicken-and-egg problem (ASC needs this vault's address too).
-    address public asc;
+    /// @notice Addresses authorized to call recordVerifiedPayment. Owner-managed;
+    /// no address is hardcoded or privileged over another in the contract itself.
+    mapping(address => bool) public isRecorder;
 
     mapping(address => uint256) public scoreOf;
     mapping(address => uint256) public collateralRatioOf;
@@ -39,28 +44,40 @@ contract CreditVault is Ownable, ReentrancyGuard {
     event ScoreUpdated(address indexed payer, uint256 newScore, uint256 newCollateralRatioBps);
     event LoanUnlocked(address indexed borrower, uint256 amount, uint256 collateralRatioBps);
     event LoanRepaid(address indexed borrower, uint256 principal, uint256 collateralReturned);
-    event AscSet(address indexed asc);
+    event RecorderAdded(address indexed recorder);
+    event RecorderRemoved(address indexed recorder);
 
-    modifier onlyASC() {
-        require(msg.sender == asc, "CreditVault: caller is not the ASC");
+    modifier onlyRecorder() {
+        require(isRecorder[msg.sender], "CreditVault: caller is not an authorized recorder");
         _;
     }
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
-    /// @notice One-time wiring of the ASC address, done by the deployer right after
-    /// both contracts exist.
-    function setASC(address _asc) external onlyOwner {
-        require(asc == address(0), "CreditVault: ASC already set");
-        require(_asc != address(0), "CreditVault: ASC is the zero address");
-        asc = _asc;
-        emit AscSet(_asc);
+    /// @notice Authorize a new recorder (GroundworkASC, or a validator address for
+    /// the upload-approval path). Owner-only, callable any number of times to build
+    /// up the recorder set as validators join.
+    function addRecorder(address recorder) external onlyOwner {
+        require(recorder != address(0), "CreditVault: recorder is the zero address");
+        require(!isRecorder[recorder], "CreditVault: already a recorder");
+        isRecorder[recorder] = true;
+        emit RecorderAdded(recorder);
     }
 
-    /// @notice Called by GroundworkASC once a BillPaid event has been cryptographically
-    /// verified. Increments the payer's score and steps their required collateral ratio
-    /// down toward the floor.
-    function recordVerifiedPayment(address payer, uint256 /* amount */, uint256 /* timestamp */) external onlyASC {
+    /// @notice Revoke a recorder's authorization — e.g. a validator stepping down or
+    /// a compromised key being rotated out.
+    function removeRecorder(address recorder) external onlyOwner {
+        require(isRecorder[recorder], "CreditVault: not a recorder");
+        isRecorder[recorder] = false;
+        emit RecorderRemoved(recorder);
+    }
+
+    /// @notice Called by any authorized recorder once a bill payment has been
+    /// verified — either cryptographically (GroundworkASC, for Attestcoin-attested
+    /// on-chain payments) or by validator approval (for uploaded bills). Increments
+    /// the payer's score and steps their required collateral ratio down toward the
+    /// floor.
+    function recordVerifiedPayment(address payer, uint256 /* amount */, uint256 /* timestamp */) external onlyRecorder {
         uint256 newScore = scoreOf[payer] + 1;
         scoreOf[payer] = newScore;
 

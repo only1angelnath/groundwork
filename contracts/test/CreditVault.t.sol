@@ -8,27 +8,69 @@ contract CreditVaultTest is Test {
     CreditVault internal vault;
     address internal owner = address(this);
     address internal asc = address(0xA5C);
+    address internal validator1 = address(0xBAA1);
+    address internal validator2 = address(0xBAA2);
     address internal payer = address(0xBEEF);
 
     function setUp() public {
         vault = new CreditVault(owner);
-        vault.setASC(asc);
+        vault.addRecorder(asc);
     }
 
-    function test_SetASC_OnlyOnce() public {
-        vm.expectRevert("CreditVault: ASC already set");
-        vault.setASC(address(0xDEAD));
+    function test_AddRecorder_RejectsZeroAddress() public {
+        vm.expectRevert("CreditVault: recorder is the zero address");
+        vault.addRecorder(address(0));
     }
 
-    function test_SetASC_RejectsZeroAddress() public {
-        CreditVault freshVault = new CreditVault(owner);
-        vm.expectRevert("CreditVault: ASC is the zero address");
-        freshVault.setASC(address(0));
+    function test_AddRecorder_RejectsDuplicate() public {
+        vm.expectRevert("CreditVault: already a recorder");
+        vault.addRecorder(asc); // already added in setUp
     }
 
-    function test_OnlyASC_CanRecordPayment() public {
-        vm.expectRevert("CreditVault: caller is not the ASC");
+    function test_AddRecorder_OnlyOwner() public {
+        vm.prank(payer);
+        vm.expectRevert();
+        vault.addRecorder(validator1);
+    }
+
+    function test_RemoveRecorder_Works() public {
+        vault.removeRecorder(asc);
+        assertFalse(vault.isRecorder(asc));
+
+        vm.prank(asc);
+        vm.expectRevert("CreditVault: caller is not an authorized recorder");
         vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+    }
+
+    function test_RemoveRecorder_RevertsIfNotARecorder() public {
+        vm.expectRevert("CreditVault: not a recorder");
+        vault.removeRecorder(validator1); // never added
+    }
+
+    function test_OnlyRecorder_CanRecordPayment() public {
+        vm.expectRevert("CreditVault: caller is not an authorized recorder");
+        vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+    }
+
+    /// @notice The actual point of this redesign: more than one recorder must be
+    /// able to independently record verified payments for the same payer, and the
+    /// vault must not care which one did it — a validator-approved upload and an
+    /// Attestcoin-verified on-chain payment count identically.
+    function test_MultipleRecorders_BothCanRecordPayment() public {
+        vault.addRecorder(validator1);
+        vault.addRecorder(validator2);
+
+        vm.prank(asc);
+        vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+        assertEq(vault.scoreOf(payer), 1);
+
+        vm.prank(validator1);
+        vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+        assertEq(vault.scoreOf(payer), 2);
+
+        vm.prank(validator2);
+        vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+        assertEq(vault.scoreOf(payer), 3);
     }
 
     function test_NewPayer_StartsAtDefaultRatio() public view {
@@ -50,17 +92,14 @@ contract CreditVaultTest is Test {
     /// ratio down to precisely the floor and never below it, even with an extra payment
     /// past the point where it would otherwise go under.
     function test_RepeatedPayments_FloorAtExactly11000Bps() public {
-        // STARTING=30000, STEP=2000, FLOOR=11000 -> exactly floor after (30000-11000)/2000 = 9.5,
-        // so the 10th payment is the first to land exactly on the floor.
         for (uint256 i = 0; i < 10; i++) {
             vm.prank(asc);
             vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
         }
         assertEq(vault.requiredCollateralRatioOf(payer), vault.FLOOR_COLLATERAL_RATIO_BPS());
 
-        // One payment short of that (9 payments) must NOT yet be at the floor.
         CreditVault freshVault = new CreditVault(owner);
-        freshVault.setASC(asc);
+        freshVault.addRecorder(asc);
         for (uint256 i = 0; i < 9; i++) {
             vm.prank(asc);
             freshVault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
@@ -69,8 +108,6 @@ contract CreditVaultTest is Test {
     }
 
     function test_RepeatedPayments_NeverGoBelowFloor() public {
-        // 20 payments is well past the floor; ratio must still read exactly the floor,
-        // never underflow or wrap.
         for (uint256 i = 0; i < 20; i++) {
             vm.prank(asc);
             vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
@@ -187,7 +224,6 @@ contract CreditVaultTest is Test {
         vault.repay{value: overpay}();
         vm.stopPrank();
 
-        // Should get back collateral + the 0.1 ether excess.
         assertEq(payer.balance, balanceAfterBorrow - overpay + requiredCollateral + 0.1 ether);
     }
 
@@ -202,7 +238,6 @@ contract CreditVaultTest is Test {
         vault.borrow{value: requiredCollateral}(principal);
         vault.repay{value: principal}();
 
-        // Should not revert this time — the previous loan was cleared.
         vault.borrow{value: requiredCollateral}(principal);
         vm.stopPrank();
 

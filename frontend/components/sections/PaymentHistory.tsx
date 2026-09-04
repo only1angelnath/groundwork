@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { supabase } from "@/lib/supabase";
 import { getBillerLabel } from "@/lib/abis";
@@ -14,6 +14,8 @@ type BillEvent = {
   creditcoin_tx_hash: string | null;
   created_at: string;
 };
+
+const PAGE_SIZE = 10;
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -55,26 +57,49 @@ export function PaymentHistory() {
   const { address, isConnected } = useAccount();
   const [events, setEvents] = useState<BillEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const fetchPage = useCallback(
+    async (walletLower: string, pageIndex: number) => {
+      setIsLoading(true);
+      const from = pageIndex * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data, count } = await supabase
+        .from("bill_events")
+        .select(
+          "id, sepolia_tx_hash, payee, amount, status, creditcoin_tx_hash, created_at",
+          { count: "exact" }
+        )
+        .eq("wallet_address", walletLower)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      setEvents((data as BillEvent[]) ?? []);
+      setTotalCount(count ?? 0);
+      setIsLoading(false);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!address) return;
-    const lowerAddress = address.toLowerCase();
-    let cancelled = false;
-    setIsLoading(true);
+    setPage(0);
+    fetchPage(address.toLowerCase(), 0);
+  }, [address, fetchPage]);
 
-    supabase
-      .from("bill_events")
-      .select(
-        "id, sepolia_tx_hash, payee, amount, status, creditcoin_tx_hash, created_at"
-      )
-      .eq("wallet_address", lowerAddress)
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (cancelled) return;
-        if (data) setEvents(data as BillEvent[]);
-        setIsLoading(false);
-      });
+  useEffect(() => {
+    if (!address) return;
+    fetchPage(address.toLowerCase(), page);
+  }, [page, address, fetchPage]);
+
+  // Live updates only matter while looking at the first page — a new
+  // payment showing up on page 3 would just be confusing, and re-fetching
+  // that page out from under someone mid-read is worse than a manual
+  // refresh via Next/Prev.
+  useEffect(() => {
+    if (!address || page !== 0) return;
+    const lowerAddress = address.toLowerCase();
 
     const channel = supabase
       .channel("bill_events_history_" + lowerAddress)
@@ -86,32 +111,22 @@ export function PaymentHistory() {
           table: "bill_events",
           filter: "wallet_address=eq." + lowerAddress,
         },
-        (payload) => {
-          const row = payload.new as BillEvent | undefined;
-          if (!row) return;
-          setEvents((prev) => {
-            const withoutThisRow = prev.filter((e) => e.id !== row.id);
-            return [row, ...withoutThisRow]
-              .sort(
-                (a, b) =>
-                  new Date(b.created_at).getTime() -
-                  new Date(a.created_at).getTime()
-              )
-              .slice(0, 20);
-          });
+        () => {
+          fetchPage(lowerAddress, 0);
         }
       )
       .subscribe();
 
     return () => {
-      cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [address]);
+  }, [address, page, fetchPage]);
 
   if (!isConnected || !address) {
     return null;
   }
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <section className="flex flex-col items-center gap-6 px-6 py-16">
@@ -131,59 +146,86 @@ export function PaymentHistory() {
           No payments yet — pay a demo bill above to see it here.
         </p>
       ) : (
-        <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-glass-border bg-glass-100 backdrop-blur-md">
-          {events.map((event, i) => (
-            <div
-              key={event.id}
-              className={
-                "flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-glass-100" +
-                (i !== events.length - 1 ? " border-b border-line-200" : "")
-              }
-            >
-              <div className="flex flex-col">
-                <span className="text-sm text-ink-900">
-                  {getBillerLabel(event.payee)}
-                </span>
-                <span className="text-xs text-warmgray-500">
-                  {formatWhen(event.created_at)}
-                </span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span
-                  className={
-                    "text-xs font-medium " +
-                    (STATUS_COLOR[event.status] ?? "text-warmgray-500")
-                  }
-                >
-                  {STATUS_LABEL[event.status] ?? event.status}
-                </span>
-                <a
-                  href={
-                    "https://sepolia.etherscan.io/tx/" + event.sepolia_tx_hash
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-warmgray-500 underline transition-colors hover:text-pink-500"
-                >
-                  Sepolia
-                </a>
-                {event.creditcoin_tx_hash && (
+        <>
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-glass-border bg-glass-100 backdrop-blur-md">
+            {events.map((event, i) => (
+              <div
+                key={event.id}
+                className={
+                  "flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-glass-100" +
+                  (i !== events.length - 1 ? " border-b border-line-200" : "")
+                }
+              >
+                <div className="flex flex-col">
+                  <span className="text-sm text-ink-900">
+                    {getBillerLabel(event.payee)}
+                  </span>
+                  <span className="text-xs text-warmgray-500">
+                    {formatWhen(event.created_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span
+                    className={
+                      "text-xs font-medium " +
+                      (STATUS_COLOR[event.status] ?? "text-warmgray-500")
+                    }
+                  >
+                    {STATUS_LABEL[event.status] ?? event.status}
+                  </span>
                   <a
                     href={
-                      "https://creditcoin3-testnet.subscan.io/tx/" +
-                      event.creditcoin_tx_hash
+                      "https://sepolia.etherscan.io/tx/" +
+                      event.sepolia_tx_hash
                     }
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-warmgray-500 underline transition-colors hover:text-pink-500"
                   >
-                    Creditcoin
+                    Sepolia
                   </a>
-                )}
+                  {event.creditcoin_tx_hash && (
+                    <a
+                      href={
+                        "https://creditcoin3-testnet.subscan.io/tx/" +
+                        event.creditcoin_tx_hash
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-warmgray-500 underline transition-colors hover:text-pink-500"
+                    >
+                      Creditcoin
+                    </a>
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="text-sm text-warmgray-500 underline transition-colors hover:text-pink-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-warmgray-300">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                onClick={() =>
+                  setPage((p) => Math.min(totalPages - 1, p + 1))
+                }
+                disabled={page >= totalPages - 1}
+                className="text-sm text-warmgray-500 underline transition-colors hover:text-pink-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
+              >
+                Next
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </section>
   );

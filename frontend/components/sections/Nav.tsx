@@ -25,13 +25,16 @@ export function Nav() {
           <Link href="/#faq" className="transition hover:text-ink-900">
             FAQ
           </Link>
+          <Link href="/#roadmap" className="transition hover:text-ink-900">
+            Roadmap
+          </Link>
           <Link href="/dashboard" className="transition hover:text-ink-900">
             Dashboard
           </Link>
         </nav>
 
         <Link
-          href="/#connect"
+          href="/dashboard"
           className="rounded-full bg-gradient-to-b from-pink-400 to-pink-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:scale-105 hover:shadow-md"
         >
           Get Started
