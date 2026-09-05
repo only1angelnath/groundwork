@@ -67,10 +67,10 @@ export const CREDIT_VAULT_ABI = [
 export const BILLPAY_ADDRESS = (process.env.NEXT_PUBLIC_BILLPAY_ADDRESS ??
   "0xF0572C9E81943374f8A707F6821710D2262E8B22") as `0x${string}`;
 
-// v2 CreditVault (Phase 5.5) — replaces the original v1 address.
+// v3 CreditVault (Phase 6) — multi-recorder redesign, replaces the v2 address.
 export const CREDIT_VAULT_ADDRESS = (process.env
   .NEXT_PUBLIC_CREDIT_VAULT_ADDRESS ??
-  "0x21209299B5B21F0f599f19aF5C1a9D8EF96cC74A") as `0x${string}`;
+  "0xe5233ee60688A151AB47F788E164eA9BB013AB05") as `0x${string}`;
 
 // Demo billers — symbolic addresses labelled as recognizable use cases so
 // the demo reads as a real product rather than one placeholder button.
