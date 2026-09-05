@@ -4,10 +4,12 @@ pragma solidity ^0.8.23;
 import {Test} from "forge-std/Test.sol";
 import {CreditVault} from "../src/CreditVault.sol";
 import {BillValidator} from "../src/BillValidator.sol";
+import {SoulboundBillRecord} from "../src/SoulboundBillRecord.sol";
 
 contract BillValidatorTest is Test {
     CreditVault internal vault;
     BillValidator internal billValidator;
+    SoulboundBillRecord internal record;
 
     address internal owner = address(this);
     address internal validator = address(0xFACE);
@@ -25,8 +27,10 @@ contract BillValidatorTest is Test {
 
     function setUp() public {
         vault = new CreditVault(owner);
-        billValidator = new BillValidator(validator, address(vault));
+        record = new SoulboundBillRecord(owner);
+        billValidator = new BillValidator(validator, address(vault), address(record));
         vault.addRecorder(address(billValidator));
+        record.addMinter(address(billValidator));
 
         vm.deal(payer, 1 ether);
     }
@@ -38,12 +42,17 @@ contract BillValidatorTest is Test {
 
     function test_Constructor_RejectsZeroValidator() public {
         vm.expectRevert("BillValidator: validator is the zero address");
-        new BillValidator(address(0), address(vault));
+        new BillValidator(address(0), address(vault), address(record));
     }
 
     function test_Constructor_RejectsZeroCreditVault() public {
         vm.expectRevert("BillValidator: creditVault is the zero address");
-        new BillValidator(validator, address(0));
+        new BillValidator(validator, address(0), address(record));
+    }
+
+    function test_Constructor_RejectsZeroSoulboundRecord() public {
+        vm.expectRevert("BillValidator: soulboundRecord is the zero address");
+        new BillValidator(validator, address(vault), address(0));
     }
 
     function test_SubmitBill_RejectsWrongFee() public {
@@ -125,6 +134,22 @@ contract BillValidatorTest is Test {
         assertEq(vault.scoreOf(payer), 1);
         (,,,, BillValidator.Status status) = billValidator.bills(billId);
         assertEq(uint8(status), uint8(BillValidator.Status.Approved));
+    }
+
+    function test_ApproveBill_MintsSoulboundRecord() public {
+        uint256 billId = _submit();
+        assertEq(record.balanceOf(payer), 0);
+
+        vm.prank(validator);
+        billValidator.approveBill(billId);
+
+        assertEq(record.balanceOf(payer), 1);
+        assertEq(record.ownerOf(0), payer);
+
+        (address recordPayer, uint256 recordBillId, uint256 claimedAmount,) = record.recordOf(0);
+        assertEq(recordPayer, payer);
+        assertEq(recordBillId, billId);
+        assertEq(claimedAmount, 1 ether);
     }
 
     function test_ApproveBill_RevertsIfAlreadyDecided() public {

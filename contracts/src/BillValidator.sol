@@ -8,6 +8,12 @@ interface ICreditVault {
     function recordVerifiedPayment(address payer, uint256 amount, uint256 timestamp) external;
 }
 
+/// @notice Minimal interface into SoulboundBillRecord — BillValidator mints the
+/// permanent on-chain receipt directly on approval.
+interface ISoulboundBillRecord {
+    function mint(address to, uint256 billId, uint256 claimedAmount) external returns (uint256 tokenId);
+}
+
 /// @title BillValidator
 /// @notice Deployed on Creditcoin CC3 Testnet. The upload-approval path for bills that
 /// weren't paid on-chain on Sepolia (so Attestcoin/GroundworkASC has nothing to verify):
@@ -24,7 +30,10 @@ interface ICreditVault {
 ///
 /// This contract must be authorized as a recorder on CreditVault via
 /// CreditVault.addRecorder(address(this)) after deployment — it is not a recorder by
-/// default, same as GroundworkASC.
+/// default, same as GroundworkASC. It must likewise be authorized as a minter on
+/// SoulboundBillRecord via SoulboundBillRecord.addMinter(address(this)) — deploy order
+/// is SoulboundBillRecord first, then this contract (pointed at it), then both
+/// authorizations, mirroring the CreditVault + GroundworkASC deploy sequence.
 contract BillValidator {
     enum Status {
         Pending,
@@ -48,6 +57,7 @@ contract BillValidator {
 
     address public immutable validator;
     ICreditVault public immutable creditVault;
+    ISoulboundBillRecord public immutable soulboundRecord;
 
     uint256 public nextBillId;
     mapping(uint256 => BillSubmission) public bills;
@@ -55,7 +65,7 @@ contract BillValidator {
     event BillSubmitted(
         uint256 indexed billId, address indexed payer, uint256 claimedAmount, bytes32 documentHash
     );
-    event BillApproved(uint256 indexed billId, address indexed payer, uint256 claimedAmount);
+    event BillApproved(uint256 indexed billId, address indexed payer, uint256 claimedAmount, uint256 tokenId);
     event BillRejected(uint256 indexed billId, address indexed payer, string reason);
 
     modifier onlyValidator() {
@@ -63,11 +73,13 @@ contract BillValidator {
         _;
     }
 
-    constructor(address _validator, address _creditVault) {
+    constructor(address _validator, address _creditVault, address _soulboundRecord) {
         require(_validator != address(0), "BillValidator: validator is the zero address");
         require(_creditVault != address(0), "BillValidator: creditVault is the zero address");
+        require(_soulboundRecord != address(0), "BillValidator: soulboundRecord is the zero address");
         validator = _validator;
         creditVault = ICreditVault(_creditVault);
+        soulboundRecord = ISoulboundBillRecord(_soulboundRecord);
     }
 
     /// @notice Submit a bill for validator review. `documentHash` is a hash of the
@@ -98,8 +110,9 @@ contract BillValidator {
     }
 
     /// @notice Approve a pending bill. Records the payment on CreditVault exactly as
-    /// GroundworkASC would for an on-chain-verified one. Reverts if the bill doesn't
-    /// exist or has already been decided.
+    /// GroundworkASC would for an on-chain-verified one, then mints the payer a
+    /// SoulboundBillRecord as the permanent on-chain receipt. Reverts if the bill
+    /// doesn't exist or has already been decided.
     function approveBill(uint256 billId) external onlyValidator {
         BillSubmission storage bill = bills[billId];
         require(bill.payer != address(0), "BillValidator: bill does not exist");
@@ -108,8 +121,9 @@ contract BillValidator {
         bill.status = Status.Approved;
 
         creditVault.recordVerifiedPayment(bill.payer, bill.claimedAmount, bill.submittedAt);
+        uint256 tokenId = soulboundRecord.mint(bill.payer, billId, bill.claimedAmount);
 
-        emit BillApproved(billId, bill.payer, bill.claimedAmount);
+        emit BillApproved(billId, bill.payer, bill.claimedAmount, tokenId);
     }
 
     /// @notice Reject a pending bill. No refund of the submission fee — it already
