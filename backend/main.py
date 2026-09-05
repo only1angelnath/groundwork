@@ -1,5 +1,5 @@
 """
-Groundwork API — Phase 3.
+Groundwork API — Phase 3, extended Phase 6.5 with bill upload/validator routes.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ load_dotenv()  # local dev convenience only; Render sets real env vars directly
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, dashboard, score_history
+from routers import auth, bills, dashboard, score_history
 
 app = FastAPI(title="Groundwork API")
 
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(score_history.router)
+app.include_router(bills.router)
 
 
 @app.get("/health")
