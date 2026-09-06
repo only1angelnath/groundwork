@@ -107,3 +107,50 @@ export function getBillerLabel(address: string): string {
   if (match) return match.label;
   return address.slice(0, 6) + "..." + address.slice(-4);
 }
+
+// BillValidator (Phase 6.5, validator/upload system) — only the functions
+// the frontend calls directly: submitBill (upload page), approveBill/
+// rejectBill (validator review page), SUBMISSION_FEE (upload page, to
+// send the exact right value). getPendingBillIds/bills are read by the
+// backend instead (see backend/chain_bills.py) since that route already
+// needs a service-role Supabase client for signed URLs.
+export const BILL_VALIDATOR_ABI = [
+  {
+    type: "function",
+    name: "submitBill",
+    stateMutability: "payable",
+    inputs: [
+      { name: "claimedAmount", type: "uint256" },
+      { name: "documentHash", type: "bytes32" },
+    ],
+    outputs: [{ name: "billId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approveBill",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "billId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "rejectBill",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "billId", type: "uint256" },
+      { name: "reason", type: "string" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "SUBMISSION_FEE",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+export const BILL_VALIDATOR_ADDRESS = (process.env
+  .NEXT_PUBLIC_BILL_VALIDATOR_ADDRESS ??
+  "0x63E11DFA6E0141d52ceB0Bac88B41aAf273e9c28") as `0x${string}`;

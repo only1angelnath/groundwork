@@ -4,23 +4,23 @@ import { BrandMotion } from "@/components/illustrations/BrandMotion";
 const ROADMAP_ITEMS = [
   {
     title: "Decentralized validator network",
-    detail:
-      "Today, bill approvals run through a small permissioned validator set. Next: staking, slashing, and a dispute window so anyone can validate.",
+    today: "Permissioned validator",
+    next: "Staked & slashed",
   },
   {
     title: "Lender marketplace",
-    detail:
-      "Today, borrowing draws from a single pool at an algorithmic rate. Next: individual lenders underwriting individual borrowers with real capital.",
+    today: "Single pool, algorithmic rate",
+    next: "Individual lenders",
   },
   {
     title: "Real biller integrations",
-    detail:
-      "Today, bill payments are self-attested. Next: direct integrations with utility and rent-payment platforms.",
+    today: "Self-attested",
+    next: "Direct integrations",
   },
   {
     title: "Full KYC",
-    detail:
-      "Today, identity verification is lightweight. Next: a complete compliance-grade KYC/AML flow.",
+    today: "Lightweight",
+    next: "Compliance-grade KYC/AML",
   },
 ];
 
@@ -28,11 +28,7 @@ export function Resolution() {
   return (
     <section
       id="roadmap"
-      className="relative flex flex-col items-center gap-10 overflow-hidden px-6 py-16 text-center"
-      style={{
-        background:
-          "radial-gradient(circle at 50% 20%, #F5F3EF 0%, #EDEAE3 100%)",
-      }}
+      className="relative flex flex-col items-center gap-10 overflow-hidden bg-cream-50 px-6 py-16 text-center"
     >
       <BrandMotion />
 
@@ -40,22 +36,28 @@ export function Resolution() {
         <h2 className="font-[family-name:var(--font-display)] text-4xl leading-tight sm:text-5xl">
           <span className="font-bold text-ink-900">Where this goes</span>
           <br />
-          <span className="font-normal text-warmgray-500">
-            from here.
-          </span>
+          <span className="font-normal italic text-warmgray-500">from here.</span>
         </h2>
       </div>
 
-      <div className="relative z-10 grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="relative z-10 flex w-full max-w-2xl flex-col divide-y divide-line-200 overflow-hidden rounded-3xl border border-glass-border bg-glass-100 text-left backdrop-blur-md">
         {ROADMAP_ITEMS.map((item) => (
           <div
             key={item.title}
-            className="rounded-2xl border border-glass-border bg-glass-100 p-5 text-left backdrop-blur-md transition hover:scale-[1.02]"
+            className="flex flex-col gap-3 p-6 transition hover:bg-white/40 sm:flex-row sm:items-center sm:justify-between"
           >
             <p className="font-[family-name:var(--font-body)] text-sm font-semibold text-ink-900">
               {item.title}
             </p>
-            <p className="mt-1 text-sm text-warmgray-500">{item.detail}</p>
+            <div className="flex items-center gap-3 whitespace-nowrap">
+              <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-300 line-through">
+                {item.today}
+              </span>
+              <span className="text-warmgray-500">&rarr;</span>
+              <span className="font-[family-name:var(--font-data)] text-sm font-semibold text-brass-500">
+                {item.next}
+              </span>
+            </div>
           </div>
         ))}
       </div>

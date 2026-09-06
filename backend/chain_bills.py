@@ -38,6 +38,12 @@ def get_pending_bill_ids() -> list[int]:
     return list(_billvalidator.functions.getPendingBillIds().call())
 
 
+def get_next_bill_id() -> int:
+    """Total number of bills ever submitted — every valid bill_id is in
+    range(get_next_bill_id())."""
+    return _billvalidator.functions.nextBillId().call()
+
+
 def get_bill(bill_id: int) -> dict:
     """Returns {payer, claimed_amount, document_hash, submitted_at, status}.
     status: 0=Pending, 1=Approved, 2=Rejected (BillValidator.Status enum
