@@ -242,6 +242,12 @@ export function Dashboard() {
           attestation of the Sepolia payment, not who the wallet belongs to.
           Real biller integration is out of scope for this build.
         </p>
+        <Link
+          href="/upload"
+          className="rounded-full border border-line-200 bg-white/60 px-6 py-3 font-[family-name:var(--font-body)] text-sm font-semibold text-ink-900 shadow-sm transition hover:scale-[1.02] hover:border-pink-400 hover:text-pink-500 hover:shadow-md"
+        >
+          Have a bill you paid off-chain? Submit it for review &rarr;
+        </Link>
         {DEMO_BILLERS.some((b) => !b.address) && (
           <p className="max-w-md text-center text-sm text-pink-500">
             One or more demo biller addresses are not configured
