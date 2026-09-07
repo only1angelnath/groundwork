@@ -14,9 +14,10 @@ import { creditcoinTestnet } from "@/lib/chains";
 import { CREDIT_VAULT_ABI, CREDIT_VAULT_ADDRESS } from "@/lib/abis";
 import { Nav } from "@/components/sections/Nav";
 import { Footer } from "@/components/sections/Footer";
+import { KycGate } from "@/components/KycGate";
 
-export default function BorrowPage() {
-  const { address, isConnected, chainId } = useAccount();
+function BorrowFlow() {
+  const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const [amountInput, setAmountInput] = useState("0.01");
 
@@ -26,7 +27,7 @@ export default function BorrowPage() {
     functionName: "requiredCollateralRatioOf",
     args: address ? [address] : undefined,
     chainId: creditcoinTestnet.id,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: !!address },
   });
 
   const { data: loan, refetch: refetchLoan } = useReadContract({
@@ -35,7 +36,7 @@ export default function BorrowPage() {
     functionName: "loanOf",
     args: address ? [address] : undefined,
     chainId: creditcoinTestnet.id,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: !!address },
   });
 
   const {
@@ -116,6 +117,142 @@ export default function BorrowPage() {
   }
 
   return (
+    <div className="w-full max-w-md space-y-6">
+      <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
+        <p className="text-sm text-warmgray-500">
+          Your required collateral ratio
+        </p>
+        <p className="font-[family-name:var(--font-data)] text-3xl text-brass-500">
+          {ratioPercent}%
+        </p>
+      </div>
+
+      {hasActiveLoan ? (
+        <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
+          <p className="text-sm text-warmgray-500">Active loan</p>
+          <p className="font-[family-name:var(--font-data)] text-2xl text-ink-900">
+            {formatEther(principal)} tCTC borrowed
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-data)] text-sm text-warmgray-500">
+            {formatEther(collateral)} tCTC collateral locked
+          </p>
+
+          <button
+            onClick={handleRepay}
+            disabled={isRepaySending || isRepayConfirming}
+            className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isRepaySending
+              ? "Confirm in wallet..."
+              : isRepayConfirming
+                ? "Confirming..."
+                : "Repay " + formatEther(principal) + " tCTC"}
+          </button>
+
+          {repayTxHash && (
+            <a
+              href={
+                "https://creditcoin3-testnet.subscan.io/tx/" +
+                repayTxHash
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block text-center text-sm text-warmgray-500 underline transition-colors hover:text-pink-500"
+            >
+              View transaction
+            </a>
+          )}
+
+          {isRepayConfirmed && (
+            <p className="mt-3 text-center text-sm text-leaf-500">
+              Repaid. Your collateral has been returned.
+            </p>
+          )}
+
+          {repayError && (
+            <p className="mt-3 text-center text-sm text-pink-500">
+              {repayError.message}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
+          <label className="text-sm text-warmgray-500">
+            Amount to borrow (tCTC)
+          </label>
+          <input
+            type="text"
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-line-200 bg-cream-50 px-4 py-2 font-[family-name:var(--font-data)] text-ink-900 outline-none transition focus:border-pink-400"
+          />
+
+          {requiredCollateralWei !== null && (
+            <p className="mt-3 text-sm text-warmgray-500">
+              Requires{" "}
+              <span className="font-[family-name:var(--font-data)] text-ink-900">
+                {formatEther(requiredCollateralWei)} tCTC
+              </span>{" "}
+              collateral at your current {ratioPercent}% ratio.
+            </p>
+          )}
+
+          <button
+            onClick={handleBorrow}
+            disabled={
+              !requiredCollateralWei ||
+              isBorrowSending ||
+              isBorrowConfirming
+            }
+            className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isBorrowSending
+              ? "Confirm in wallet..."
+              : isBorrowConfirming
+                ? "Confirming..."
+                : "Borrow"}
+          </button>
+
+          {borrowTxHash && (
+            <a
+              href={
+                "https://creditcoin3-testnet.subscan.io/tx/" +
+                borrowTxHash
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block text-center text-sm text-warmgray-500 underline transition-colors hover:text-pink-500"
+            >
+              View transaction
+            </a>
+          )}
+
+          {isBorrowConfirmed && (
+            <p className="mt-3 text-center text-sm text-leaf-500">
+              Borrowed successfully.
+            </p>
+          )}
+
+          {borrowError && (
+            <p className="mt-3 text-center text-sm text-pink-500">
+              {borrowError.message}
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="text-center text-xs text-warmgray-300">
+        Testnet demo. No interest is charged — repaying in full returns
+        exactly the collateral you posted.
+      </p>
+    </div>
+  );
+}
+
+export default function BorrowPage() {
+  const { address, isConnected } = useAccount();
+
+  return (
     <main className="flex flex-1 flex-col">
       <Nav />
 
@@ -148,135 +285,9 @@ export default function BorrowPage() {
         )}
 
         {isConnected && (
-          <div className="w-full max-w-md space-y-6">
-            <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
-              <p className="text-sm text-warmgray-500">
-                Your required collateral ratio
-              </p>
-              <p className="font-[family-name:var(--font-data)] text-3xl text-brass-500">
-                {ratioPercent}%
-              </p>
-            </div>
-
-            {hasActiveLoan ? (
-              <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
-                <p className="text-sm text-warmgray-500">Active loan</p>
-                <p className="font-[family-name:var(--font-data)] text-2xl text-ink-900">
-                  {formatEther(principal)} tCTC borrowed
-                </p>
-                <p className="mt-1 font-[family-name:var(--font-data)] text-sm text-warmgray-500">
-                  {formatEther(collateral)} tCTC collateral locked
-                </p>
-
-                <button
-                  onClick={handleRepay}
-                  disabled={isRepaySending || isRepayConfirming}
-                  className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isRepaySending
-                    ? "Confirm in wallet..."
-                    : isRepayConfirming
-                      ? "Confirming..."
-                      : "Repay " + formatEther(principal) + " tCTC"}
-                </button>
-
-                {repayTxHash && (
-                  <a
-                    href={
-                      "https://creditcoin3-testnet.subscan.io/tx/" +
-                      repayTxHash
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 block text-center text-sm text-warmgray-500 underline transition-colors hover:text-pink-500"
-                  >
-                    View transaction
-                  </a>
-                )}
-
-                {isRepayConfirmed && (
-                  <p className="mt-3 text-center text-sm text-leaf-500">
-                    Repaid. Your collateral has been returned.
-                  </p>
-                )}
-
-                {repayError && (
-                  <p className="mt-3 text-center text-sm text-pink-500">
-                    {repayError.message}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
-                <label className="text-sm text-warmgray-500">
-                  Amount to borrow (tCTC)
-                </label>
-                <input
-                  type="text"
-                  value={amountInput}
-                  onChange={(e) => setAmountInput(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-line-200 bg-cream-50 px-4 py-2 font-[family-name:var(--font-data)] text-ink-900 outline-none transition focus:border-pink-400"
-                />
-
-                {requiredCollateralWei !== null && (
-                  <p className="mt-3 text-sm text-warmgray-500">
-                    Requires{" "}
-                    <span className="font-[family-name:var(--font-data)] text-ink-900">
-                      {formatEther(requiredCollateralWei)} tCTC
-                    </span>{" "}
-                    collateral at your current {ratioPercent}% ratio.
-                  </p>
-                )}
-
-                <button
-                  onClick={handleBorrow}
-                  disabled={
-                    !requiredCollateralWei ||
-                    isBorrowSending ||
-                    isBorrowConfirming
-                  }
-                  className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isBorrowSending
-                    ? "Confirm in wallet..."
-                    : isBorrowConfirming
-                      ? "Confirming..."
-                      : "Borrow"}
-                </button>
-
-                {borrowTxHash && (
-                  <a
-                    href={
-                      "https://creditcoin3-testnet.subscan.io/tx/" +
-                      borrowTxHash
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 block text-center text-sm text-warmgray-500 underline transition-colors hover:text-pink-500"
-                  >
-                    View transaction
-                  </a>
-                )}
-
-                {isBorrowConfirmed && (
-                  <p className="mt-3 text-center text-sm text-leaf-500">
-                    Borrowed successfully.
-                  </p>
-                )}
-
-                {borrowError && (
-                  <p className="mt-3 text-center text-sm text-pink-500">
-                    {borrowError.message}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <p className="text-center text-xs text-warmgray-300">
-              Testnet demo. No interest is charged — repaying in full returns
-              exactly the collateral you posted.
-            </p>
-          </div>
+          <KycGate address={address} next="/borrow">
+            <BorrowFlow />
+          </KycGate>
         )}
       </section>
 

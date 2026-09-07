@@ -18,6 +18,7 @@ import { useCtcConversion, SUPPORTED_CURRENCIES, CurrencyCode } from "@/lib/useC
 import { API_BASE_URL } from "@/lib/api";
 import { Nav } from "@/components/sections/Nav";
 import { Footer } from "@/components/sections/Footer";
+import { KycGate } from "@/components/KycGate";
 
 // SHA-256 of the file, client-side — this is what gets submitted on-chain
 // as documentHash, and what the backend recomputes server-side to confirm
@@ -48,8 +49,8 @@ const STATUS_STYLES: Record<MyBillStatus, string> = {
   rejected: "text-pink-500",
 };
 
-export default function UploadPage() {
-  const { address, isConnected, chainId } = useAccount();
+function UploadFlow() {
+  const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const config = useConfig();
   const { token, signIn, isSigningIn, error: siweError, isSignedIn } =
@@ -182,6 +183,135 @@ export default function UploadPage() {
     stage !== "uploading";
 
   return (
+    <>
+      {!isSignedIn && (
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={signIn}
+            disabled={isSigningIn}
+            className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isSigningIn ? "Check your wallet..." : "Sign in to submit a bill"}
+          </button>
+          {siweError && <p className="text-sm text-pink-500">{siweError}</p>}
+        </div>
+      )}
+
+      {isSignedIn && stage !== "done" && (
+        <div className="w-full max-w-md space-y-6">
+          <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
+            <label className="text-sm text-warmgray-500">Amount claimed</label>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                className="flex-1 rounded-lg border border-line-200 bg-cream-50 px-4 py-2 font-[family-name:var(--font-data)] text-ink-900 outline-none transition focus:border-pink-400"
+              />
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+                className="rounded-lg border border-line-200 bg-cream-50 px-3 py-2 text-sm text-ink-900 outline-none transition focus:border-pink-400"
+              >
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {needsRates && (
+              <p className="mt-2 text-xs text-warmgray-300">
+                {ratesError
+                  ? "Live conversion rates unavailable — switch to tCTC to enter an amount directly."
+                  : !ratesReady
+                    ? "Loading conversion rates..."
+                    : ctcAmount !== null
+                      ? `≈ ${ctcAmount.toFixed(6)} tCTC (uses Creditcoin's real market price as a stand-in — testnet tCTC itself has no market value)`
+                      : null}
+              </p>
+            )}
+
+            <label className="mt-4 block text-sm text-warmgray-500">
+              Bill document
+            </label>
+            <input
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="mt-2 w-full text-sm text-warmgray-500 file:mr-4 file:rounded-full file:border-0 file:bg-cream-200 file:px-4 file:py-2 file:text-sm file:text-ink-900"
+            />
+
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {stage === "submitting"
+                ? "Confirm in wallet..."
+                : stage === "uploading"
+                  ? "Uploading document..."
+                  : "Submit bill"}
+            </button>
+
+            {errorMessage && (
+              <p className="mt-3 text-center text-sm text-pink-500">{errorMessage}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {stage === "done" && (
+        <div className="w-full max-w-md rounded-2xl border border-glass-border bg-glass-100 p-6 text-center backdrop-blur-md">
+          <p className="text-leaf-500">
+            Bill #{billId} submitted and awaiting validator review.
+          </p>
+          <button
+            onClick={() => {
+              setStage("idle");
+              setFile(null);
+              setBillId(null);
+            }}
+            className="mt-4 text-sm text-ink-900 underline decoration-pink-400 underline-offset-4 transition-colors hover:text-pink-500"
+          >
+            Submit another bill
+          </button>
+        </div>
+      )}
+
+      {isSignedIn && myBills.length > 0 && (
+        <div className="w-full max-w-md space-y-3">
+          <h2 className="font-[family-name:var(--font-display)] text-xl text-ink-900">
+            Your submissions
+          </h2>
+          {myBillsError && <p className="text-sm text-pink-500">{myBillsError}</p>}
+          <div className="space-y-2">
+            {myBills.map((bill) => (
+              <div
+                key={bill.bill_id}
+                className="flex items-center justify-between rounded-xl border border-glass-border bg-glass-100 px-4 py-3 backdrop-blur-md"
+              >
+                <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-500">
+                  Bill #{bill.bill_id}
+                </span>
+                <span
+                  className={`font-[family-name:var(--font-data)] text-sm font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
+                >
+                  {bill.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function UploadPage() {
+  const { address, isConnected } = useAccount();
+
+  return (
     <main className="flex flex-1 flex-col">
       <Nav />
 
@@ -208,125 +338,10 @@ export default function UploadPage() {
           </div>
         )}
 
-        {isConnected && !isSignedIn && (
-          <div className="flex flex-col items-center gap-4">
-            <button
-              onClick={signIn}
-              disabled={isSigningIn}
-              className="rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isSigningIn ? "Check your wallet..." : "Sign in to submit a bill"}
-            </button>
-            {siweError && <p className="text-sm text-pink-500">{siweError}</p>}
-          </div>
-        )}
-
-        {isSignedIn && stage !== "done" && (
-          <div className="w-full max-w-md space-y-6">
-            <div className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md">
-              <label className="text-sm text-warmgray-500">Amount claimed</label>
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  value={amountInput}
-                  onChange={(e) => setAmountInput(e.target.value)}
-                  className="flex-1 rounded-lg border border-line-200 bg-cream-50 px-4 py-2 font-[family-name:var(--font-data)] text-ink-900 outline-none transition focus:border-pink-400"
-                />
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-                  className="rounded-lg border border-line-200 bg-cream-50 px-3 py-2 text-sm text-ink-900 outline-none transition focus:border-pink-400"
-                >
-                  {SUPPORTED_CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {needsRates && (
-                <p className="mt-2 text-xs text-warmgray-300">
-                  {ratesError
-                    ? "Live conversion rates unavailable — switch to tCTC to enter an amount directly."
-                    : !ratesReady
-                      ? "Loading conversion rates..."
-                      : ctcAmount !== null
-                        ? `≈ ${ctcAmount.toFixed(6)} tCTC (uses Creditcoin's real market price as a stand-in — testnet tCTC itself has no market value)`
-                        : null}
-                </p>
-              )}
-
-              <label className="mt-4 block text-sm text-warmgray-500">
-                Bill document
-              </label>
-              <input
-                type="file"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="mt-2 w-full text-sm text-warmgray-500 file:mr-4 file:rounded-full file:border-0 file:bg-cream-200 file:px-4 file:py-2 file:text-sm file:text-ink-900"
-              />
-
-              <button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="mt-6 w-full rounded-full bg-gradient-to-r from-pink-500 to-pink-400 px-8 py-3 font-[family-name:var(--font-body)] text-white transition hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {stage === "submitting"
-                  ? "Confirm in wallet..."
-                  : stage === "uploading"
-                    ? "Uploading document..."
-                    : "Submit bill"}
-              </button>
-
-              {errorMessage && (
-                <p className="mt-3 text-center text-sm text-pink-500">{errorMessage}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {stage === "done" && (
-          <div className="w-full max-w-md rounded-2xl border border-glass-border bg-glass-100 p-6 text-center backdrop-blur-md">
-            <p className="text-leaf-500">
-              Bill #{billId} submitted and awaiting validator review.
-            </p>
-            <button
-              onClick={() => {
-                setStage("idle");
-                setFile(null);
-                setBillId(null);
-              }}
-              className="mt-4 text-sm text-ink-900 underline decoration-pink-400 underline-offset-4 transition-colors hover:text-pink-500"
-            >
-              Submit another bill
-            </button>
-          </div>
-        )}
-
-        {isSignedIn && myBills.length > 0 && (
-          <div className="w-full max-w-md space-y-3">
-            <h2 className="font-[family-name:var(--font-display)] text-xl text-ink-900">
-              Your submissions
-            </h2>
-            {myBillsError && <p className="text-sm text-pink-500">{myBillsError}</p>}
-            <div className="space-y-2">
-              {myBills.map((bill) => (
-                <div
-                  key={bill.bill_id}
-                  className="flex items-center justify-between rounded-xl border border-glass-border bg-glass-100 px-4 py-3 backdrop-blur-md"
-                >
-                  <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-500">
-                    Bill #{bill.bill_id}
-                  </span>
-                  <span
-                    className={`font-[family-name:var(--font-data)] text-sm font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
-                  >
-                    {bill.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {isConnected && (
+          <KycGate address={address} next="/upload">
+            <UploadFlow />
+          </KycGate>
         )}
       </section>
 
