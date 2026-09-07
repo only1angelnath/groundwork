@@ -2,20 +2,23 @@
 
 // Checks the mocked-KYC status backed by backend/routers/kyc.py. This is a
 // public, no-auth read (GET /api/kyc/status/{wallet}) — it only exposes a
-// boolean per wallet, no more sensitive than the on-chain score itself, so
-// /upload and /borrow can gate on it without forcing a SIWE sign-in just
-// to check.
+// status string and two timestamps per wallet, no more sensitive than the
+// on-chain score itself, so /upload and /borrow can gate on it without
+// forcing a SIWE sign-in just to check.
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL } from "./api";
 
+export type KycStatus = "none" | "pending" | "approved" | "rejected";
+
 export function useKycStatus(address: `0x${string}` | undefined) {
-  const [verified, setVerified] = useState(false);
+  const [status, setStatus] = useState<KycStatus>("none");
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     if (!address) {
-      setVerified(false);
+      setStatus("none");
       return;
     }
     setIsLoading(true);
@@ -24,7 +27,8 @@ export function useKycStatus(address: `0x${string}` | undefined) {
       const res = await fetch(`${API_BASE_URL}/api/kyc/status/${address}`);
       if (!res.ok) throw new Error("Could not check verification status");
       const body = await res.json();
-      setVerified(!!body.verified);
+      setStatus(body.status as KycStatus);
+      setRejectionReason(body.rejection_reason ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not check verification status");
     } finally {
@@ -36,5 +40,5 @@ export function useKycStatus(address: `0x${string}` | undefined) {
     refetch();
   }, [refetch]);
 
-  return { verified, isLoading, error, refetch };
+  return { status, rejectionReason, isLoading, error, refetch };
 }

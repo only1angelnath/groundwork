@@ -13,7 +13,6 @@ fi
 
 MSG="${1:-"chore: sync progress $(date +%Y-%m-%d_%H:%M)"}"
 
-# Safety: refuse to commit if a real .env file is staged/untracked-but-added
 if git status --porcelain | grep -E '(^|/)\.env($|\.local$)' ; then
   echo "!! Refusing to commit: a .env file appears in git status. Check .gitignore." >&2
   exit 1
