@@ -13,6 +13,7 @@ docs/handoff-*.md
 
 # Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 
