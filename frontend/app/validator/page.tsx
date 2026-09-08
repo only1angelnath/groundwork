@@ -338,7 +338,7 @@ export default function ValidatorPage() {
                     <p className="mt-2 font-[family-name:var(--font-data)] text-lg text-ink-900">
                       {formatEther(BigInt(bill.claimed_amount))} tCTC claimed
                     </p>
-                    <p className="mt-1 font-[family-name:var(--font-data)] text-xs text-warmgray-500">
+                    <p className="mt-1 truncate font-[family-name:var(--font-data)] text-xs text-warmgray-500">
                       {bill.payer}
                     </p>
 
@@ -398,21 +398,21 @@ export default function ValidatorPage() {
                     key={payer}
                     className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md"
                   >
-                    <p className="font-[family-name:var(--font-data)] text-sm text-ink-900">
+                    <p className="truncate font-[family-name:var(--font-data)] text-sm text-ink-900">
                       {payer}
                     </p>
                     <ul className="mt-3 space-y-2">
                       {payerBills.map((bill) => (
                         <li
                           key={bill.bill_id}
-                          className="flex items-center justify-between text-sm"
+                          className="flex items-center justify-between gap-2 text-sm"
                         >
-                          <span className="font-[family-name:var(--font-data)] text-warmgray-500">
+                          <span className="min-w-0 truncate font-[family-name:var(--font-data)] text-warmgray-500">
                             Bill #{bill.bill_id} &middot;{" "}
                             {formatEther(BigInt(bill.claimed_amount))} tCTC
                           </span>
                           <span
-                            className={`font-[family-name:var(--font-data)] font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
+                            className={`shrink-0 font-[family-name:var(--font-data)] font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
                           >
                             {bill.status}
                           </span>
@@ -447,11 +447,11 @@ export default function ValidatorPage() {
                     key={kyc.wallet_address}
                     className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md"
                   >
-                    <div className="flex items-center justify-between">
-                      <p className="font-[family-name:var(--font-data)] text-xs text-warmgray-500">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 flex-1 truncate font-[family-name:var(--font-data)] text-xs text-warmgray-500">
                         {kyc.wallet_address}
                       </p>
-                      <p className="font-[family-name:var(--font-data)] text-xs text-warmgray-300">
+                      <p className="shrink-0 font-[family-name:var(--font-data)] text-xs text-warmgray-300">
                         {new Date(kyc.submitted_at).toLocaleString()}
                       </p>
                     </div>
@@ -520,12 +520,12 @@ export default function ValidatorPage() {
                     key={kyc.wallet_address}
                     className="rounded-2xl border border-glass-border bg-glass-100 p-6 backdrop-blur-md"
                   >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-[family-name:var(--font-data)] text-warmgray-500">
+                    <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+                      <span className="min-w-0 truncate font-[family-name:var(--font-data)] text-warmgray-500">
                         {kyc.wallet_address} &middot; {kyc.full_name}
                       </span>
                       <span
-                        className={`font-[family-name:var(--font-data)] font-semibold capitalize ${STATUS_STYLES[kyc.status]}`}
+                        className={`shrink-0 font-[family-name:var(--font-data)] font-semibold capitalize ${STATUS_STYLES[kyc.status]}`}
                       >
                         {kyc.status}
                       </span>

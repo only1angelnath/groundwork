@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TileGridBackground } from "@/components/illustrations/TileGridBackground";
 
 export function Hero() {
@@ -40,12 +41,12 @@ export function Hero() {
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <a
-              href="#connect"
+            <Link
+              href="/dashboard"
               className="rounded-full bg-gradient-to-b from-pink-400 to-pink-500 px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:scale-[1.04] hover:shadow-lg"
             >
               Get Started
-            </a>
+            </Link>
             <a
               href="#how-it-works"
               className="rounded-full border border-glass-border bg-glass-100 px-6 py-3 text-sm font-medium text-ink-900 backdrop-blur-md transition hover:scale-[1.04] hover:bg-white/50"

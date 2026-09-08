@@ -152,7 +152,7 @@ export function PaymentHistory() {
               <div
                 key={event.id}
                 className={
-                  "flex items-center justify-between gap-4 px-6 py-4 transition hover:bg-glass-100" +
+                  "flex flex-col gap-2 px-6 py-4 transition hover:bg-glass-100 sm:flex-row sm:items-center sm:justify-between sm:gap-4" +
                   (i !== events.length - 1 ? " border-b border-line-200" : "")
                 }
               >

@@ -140,7 +140,7 @@ export function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-glass-border bg-cream-50 p-2 shadow-lg backdrop-blur-md">
+        <div className="fixed inset-x-4 top-20 z-50 rounded-2xl border border-glass-border bg-cream-50 p-2 shadow-lg backdrop-blur-md sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80">
           {notifications.length === 0 ? (
             <p className="p-4 text-center text-sm text-warmgray-500">No notifications yet.</p>
           ) : (

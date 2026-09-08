@@ -49,7 +49,7 @@ export function Resolution() {
             <p className="font-[family-name:var(--font-body)] text-sm font-semibold text-ink-900">
               {item.title}
             </p>
-            <div className="flex items-center gap-3 whitespace-nowrap">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-nowrap sm:whitespace-nowrap">
               <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-300 line-through">
                 {item.today}
               </span>
