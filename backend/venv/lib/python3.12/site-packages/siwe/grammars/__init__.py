@@ -1,1 +1,0 @@
-"""ABNF definitions."""
