@@ -26,12 +26,14 @@ other — they're the same data filtered three different ways.
 from __future__ import annotations
 
 import hashlib
+import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from auth import get_current_wallet
 from chain_bills import ZERO_ADDRESS, get_bill, get_next_bill_id, get_validator_address
 from db import get_service_client
+from telegram_notify import notify_validator
 
 router = APIRouter(prefix="/api", tags=["bills"])
 
@@ -89,6 +91,13 @@ async def upload_bill_document(
         on_conflict="bill_id",
     ).execute()
 
+    from_wei_amount = bill["claimed_amount"] / 1e18
+    notify_validator(
+        f"📄 New bill submitted for review — Bill #{bill_id}, "
+        f"~{from_wei_amount:.4f} tCTC claimed by {current_wallet.lower()}.\n"
+        f"Review: {os.environ.get('PUBLIC_FRONTEND_URL', '')}/validator"
+    )
+
     return {"status": "uploaded", "storage_path": storage_path}
 
 
@@ -138,3 +147,5 @@ def list_all_bills(current_wallet: str = Depends(get_current_wallet)) -> list:
             }
         )
     return results
+
+

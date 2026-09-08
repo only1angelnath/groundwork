@@ -8,3 +8,4 @@ web3==7.6.0
 python-dotenv==1.0.1
 pydantic==2.10.3
 python-multipart==0.0.20
+requests==2.34.2

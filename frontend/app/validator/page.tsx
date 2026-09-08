@@ -147,11 +147,33 @@ export default function ValidatorPage() {
         chainId: creditcoinTestnet.id,
       });
       await waitForTransactionReceipt(config, { hash: txHash });
+      await notifyBillReviewed(billId);
       await loadBills();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Approve failed");
     } finally {
       setBusyBillId(null);
+    }
+  }
+
+  // Bill approve/reject happens fully on-chain — this just tells the
+  // backend "this bill was just reviewed" so it can write a notification
+  // for the payer (see backend/routers/notifications.py). Best-effort: the
+  // on-chain review already succeeded regardless of whether this call
+  // does, so a failure here is logged, not surfaced as an error.
+  async function notifyBillReviewed(billId: number, reason?: string) {
+    if (!token) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/notifications/bill-reviewed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ bill_id: billId, reason: reason ?? null }),
+      });
+    } catch (err) {
+      console.error("Failed to send bill-reviewed notification", err);
     }
   }
 
@@ -175,6 +197,7 @@ export default function ValidatorPage() {
         chainId: creditcoinTestnet.id,
       });
       await waitForTransactionReceipt(config, { hash: txHash });
+      await notifyBillReviewed(billId, reason);
       await loadBills();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Reject failed");

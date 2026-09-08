@@ -30,6 +30,7 @@ one authorized validator.
 """
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -38,6 +39,8 @@ from pydantic import BaseModel
 from auth import get_current_wallet
 from chain_bills import get_validator_address
 from db import get_service_client
+from notifications import create_notification
+from telegram_notify import notify_validator
 
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
 
@@ -120,6 +123,18 @@ async def submit_kyc(
         on_conflict="wallet_address",
     ).execute()
 
+    create_notification(
+        get_validator_address(),
+        "kyc_submitted",
+        f"New identity verification submitted by {wallet}.",
+        reference_id=wallet,
+    )
+
+    notify_validator(
+        f"🪪 New KYC submission from {wallet} — {full_name}.\n"
+        f"Review: {os.environ.get('PUBLIC_FRONTEND_URL', '')}/validator"
+    )
+
     return {"status": "pending"}
 
 
@@ -187,4 +202,12 @@ def review_kyc(
     if not result.data:
         raise HTTPException(status_code=404, detail="No KYC submission found for this wallet")
 
-    return {"status": result.data[0]["status"]}
+    final_status = result.data[0]["status"]
+    create_notification(
+        wallet_address,
+        f"kyc_{final_status}",
+        "Your identity verification was approved."
+        if payload.approve
+        else f"Your identity verification was rejected: {payload.reason.strip()}",
+    )
+    return {"status": final_status}

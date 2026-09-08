@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function Nav() {
   return (
@@ -33,12 +34,15 @@ export function Nav() {
           </Link>
         </nav>
 
-        <Link
-          href="/dashboard"
-          className="rounded-full bg-gradient-to-b from-pink-400 to-pink-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:scale-105 hover:shadow-md"
-        >
-          Get Started
-        </Link>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <Link
+            href="/dashboard"
+            className="rounded-full bg-gradient-to-b from-pink-400 to-pink-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:scale-105 hover:shadow-md"
+          >
+            Get Started
+          </Link>
+        </div>
       </header>
     </div>
   );
