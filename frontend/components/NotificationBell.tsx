@@ -11,7 +11,7 @@
 // read/unread column — consistent with this project's other honestly-
 // simulated pieces (mocked KYC, demo payee), and it avoids needing a
 // SIWE-authed "mark as read" endpoint just to clear a badge.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { supabase } from "@/lib/supabase";
 
@@ -31,6 +31,20 @@ export function NotificationBell() {
   const { address } = useAccount();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on any click outside the bell/dropdown — without this, the
+  // dropdown only ever closed by clicking the bell again.
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
   const [lastSeenAt, setLastSeenAt] = useState<number>(0);
 
   useEffect(() => {
@@ -98,7 +112,7 @@ export function NotificationBell() {
   if (!address) return null;
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         onClick={handleToggle}
         className="relative rounded-full p-2 text-warmgray-500 transition-colors hover:text-pink-500"
