@@ -7,6 +7,11 @@ import { useAccount } from "wagmi";
 import { useSiweAuth } from "@/lib/useSiweAuth";
 import { useKycStatus } from "@/lib/useKycStatus";
 import { API_BASE_URL } from "@/lib/api";
+import {
+  ALLOWED_UPLOAD_ACCEPT,
+  UPLOAD_HELP_TEXT,
+  validateUploadFile,
+} from "@/lib/uploadValidation";
 import { Nav } from "@/components/sections/Nav";
 import { Footer } from "@/components/sections/Footer";
 
@@ -27,8 +32,14 @@ function KycForm() {
   const [country, setCountry] = useState("");
   const [idType, setIdType] = useState(ID_TYPES[0]);
   const [idDocument, setIdDocument] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [stage, setStage] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  function handleFileChange(selected: File | null) {
+    setIdDocument(selected);
+    setFileError(selected ? validateUploadFile(selected) : null);
+  }
 
   const canSubmit =
     isSignedIn &&
@@ -36,6 +47,7 @@ function KycForm() {
     dateOfBirth.length > 0 &&
     country.trim().length > 0 &&
     !!idDocument &&
+    !fileError &&
     stage !== "submitting";
 
   async function handleSubmit() {
@@ -87,7 +99,9 @@ function KycForm() {
           Testnet demo — this is a simulated verification step reviewed by
           the same permissioned validator that reviews bill submissions,
           not a real identity check. Your ID document is stored privately
-          and is never shared with a third-party KYC provider.
+          and is never shared with a third-party KYC provider. Please use a
+          dummy or non-sensitive document — no real ID is required for
+          this demo.
         </p>
       </div>
 
@@ -194,13 +208,14 @@ function KycForm() {
               <label className="text-sm text-warmgray-500">ID document</label>
               <input
                 type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setIdDocument(e.target.files?.[0] ?? null)}
+                accept={ALLOWED_UPLOAD_ACCEPT}
+                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
                 className="mt-2 w-full text-sm text-warmgray-500 file:mr-4 file:rounded-full file:border-0 file:bg-cream-200 file:px-4 file:py-2 file:text-sm file:text-ink-900"
               />
               <p className="mt-1 text-xs text-warmgray-300">
-                A photo or scan of your {idType.toLowerCase()}.
+                A photo or scan of your {idType.toLowerCase()}. {UPLOAD_HELP_TEXT}
               </p>
+              {fileError && <p className="mt-1 text-xs text-pink-500">{fileError}</p>}
             </div>
 
             <button

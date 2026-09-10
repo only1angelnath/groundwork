@@ -9,6 +9,15 @@
 // on Creditcoin CC3 Testnet — GroundworkASC had to be redeployed alongside
 // it since it stores the vault address as immutable. BillPay on Sepolia
 // was untouched.
+//
+// CreditVault v4 (security-audit follow-up, Sept 2026): recordVerifiedPayment
+// now tiers its collateral step-down by claimed amount instead of a flat
+// rate — see docs/collateral-tiers-addendum.md. Redeployed alongside
+// GroundworkASC and, for the first time, BillValidator too (it also holds
+// an immutable creditVault reference — see the same doc for why).
+// SoulboundBillRecord did NOT need redeploying (its minter set is
+// owner-managed, not immutable) — only re-authorized for the new
+// BillValidator via addMinter.
 
 export const BILLPAY_ABI = [
   {
@@ -67,10 +76,11 @@ export const CREDIT_VAULT_ABI = [
 export const BILLPAY_ADDRESS = (process.env.NEXT_PUBLIC_BILLPAY_ADDRESS ??
   "0xF0572C9E81943374f8A707F6821710D2262E8B22") as `0x${string}`;
 
-// v3 CreditVault (Phase 6) — multi-recorder redesign, replaces the v2 address.
+// v4 CreditVault (security-audit follow-up, Sept 2026) — tiered step-down,
+// replaces the v3 address.
 export const CREDIT_VAULT_ADDRESS = (process.env
   .NEXT_PUBLIC_CREDIT_VAULT_ADDRESS ??
-  "0xe5233ee60688A151AB47F788E164eA9BB013AB05") as `0x${string}`;
+  "0x7C458Ef4347D95449c021350e9FdCcb548474Bf4") as `0x${string}`;
 
 // Demo billers — symbolic addresses labelled as recognizable use cases so
 // the demo reads as a real product rather than one placeholder button.
@@ -153,4 +163,4 @@ export const BILL_VALIDATOR_ABI = [
 
 export const BILL_VALIDATOR_ADDRESS = (process.env
   .NEXT_PUBLIC_BILL_VALIDATOR_ADDRESS ??
-  "0x63E11DFA6E0141d52ceB0Bac88B41aAf273e9c28") as `0x${string}`;
+  "0xB44C6EB9fd286Ec9dc87ECc23A05b876404D6C94") as `0x${string}`;

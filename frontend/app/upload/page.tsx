@@ -16,6 +16,11 @@ import { BILL_VALIDATOR_ABI, BILL_VALIDATOR_ADDRESS } from "@/lib/abis";
 import { useSiweAuth } from "@/lib/useSiweAuth";
 import { useCtcConversion, SUPPORTED_CURRENCIES, CurrencyCode } from "@/lib/useCtcConversion";
 import { API_BASE_URL } from "@/lib/api";
+import {
+  ALLOWED_UPLOAD_ACCEPT,
+  UPLOAD_HELP_TEXT,
+  validateUploadFile,
+} from "@/lib/uploadValidation";
 import { Nav } from "@/components/sections/Nav";
 import { Footer } from "@/components/sections/Footer";
 import { KycGate } from "@/components/KycGate";
@@ -57,6 +62,7 @@ function UploadFlow() {
     useSiweAuth();
 
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState("10");
   const [currency, setCurrency] = useState<CurrencyCode>("USD");
   const [stage, setStage] = useState<Stage>("idle");
@@ -67,6 +73,11 @@ function UploadFlow() {
 
   const [myBills, setMyBills] = useState<MyBill[]>([]);
   const [myBillsError, setMyBillsError] = useState<string | null>(null);
+
+  function handleFileChange(selected: File | null) {
+    setFile(selected);
+    setFileError(selected ? validateUploadFile(selected) : null);
+  }
 
   const loadMyBills = useCallback(async () => {
     if (!token) return;
@@ -177,6 +188,7 @@ function UploadFlow() {
   const canSubmit =
     isSignedIn &&
     !!file &&
+    !fileError &&
     claimedAmountWei !== null &&
     !conversionBlocked &&
     stage !== "submitting" &&
@@ -238,9 +250,12 @@ function UploadFlow() {
             </label>
             <input
               type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              accept={ALLOWED_UPLOAD_ACCEPT}
+              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
               className="mt-2 w-full text-sm text-warmgray-500 file:mr-4 file:rounded-full file:border-0 file:bg-cream-200 file:px-4 file:py-2 file:text-sm file:text-ink-900"
             />
+            <p className="mt-1 text-xs text-warmgray-300">{UPLOAD_HELP_TEXT}</p>
+            {fileError && <p className="mt-1 text-xs text-pink-500">{fileError}</p>}
 
             <button
               onClick={handleSubmit}
@@ -270,6 +285,7 @@ function UploadFlow() {
             onClick={() => {
               setStage("idle");
               setFile(null);
+              setFileError(null);
               setBillId(null);
             }}
             className="mt-4 text-sm text-ink-900 underline decoration-pink-400 underline-offset-4 transition-colors hover:text-pink-500"

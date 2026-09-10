@@ -22,6 +22,10 @@ exactly what the chain doesn't hold. /api/validator/all-bills and
 logic, so the validator's pending queue, the validator's review history,
 and a submitter's own status view can never drift out of sync with each
 other — they're the same data filtered three different ways.
+
+Upload content-type/size validation and storage-path generation are
+delegated to uploads.py (shared with kyc.py) — see that module's docstring
+for why the client-supplied filename is never trusted.
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ from auth import get_current_wallet
 from chain_bills import ZERO_ADDRESS, get_bill, get_next_bill_id, get_validator_address
 from db import get_service_client
 from telegram_notify import notify_validator
+from uploads import generate_storage_path, read_and_validate_upload
 
 router = APIRouter(prefix="/api", tags=["bills"])
 
@@ -64,7 +69,8 @@ async def upload_bill_document(
     if bill["payer"] != current_wallet.lower():
         raise HTTPException(status_code=403, detail="Caller is not this bill's submitter")
 
-    contents = await file.read()
+    contents, extension = await read_and_validate_upload(file)
+
     computed_hash = "0x" + hashlib.sha256(contents).hexdigest()
     if computed_hash != bill["document_hash"]:
         raise HTTPException(
@@ -72,12 +78,14 @@ async def upload_bill_document(
             detail="Uploaded file does not match the document hash submitted on-chain",
         )
 
-    storage_path = f"{bill_id}/{file.filename}"
+    # Server-generated path — never derived from the client-supplied
+    # filename (see uploads.py's docstring for why).
+    storage_path = generate_storage_path(extension, str(bill_id))
     client = get_service_client()
     client.storage.from_(BUCKET).upload(
         storage_path,
         contents,
-        {"content-type": file.content_type or "application/octet-stream", "upsert": "true"},
+        {"content-type": file.content_type, "upsert": "true"},
     )
 
     client.table("bill_submissions").upsert(
@@ -147,5 +155,3 @@ def list_all_bills(current_wallet: str = Depends(get_current_wallet)) -> list:
             }
         )
     return results
-
-

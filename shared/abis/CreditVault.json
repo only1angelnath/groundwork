@@ -164,7 +164,7 @@
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -233,6 +233,68 @@
         "internalType": "address"
       }
     ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setTiers",
+    "inputs": [
+      {
+        "name": "newTiers",
+        "type": "tuple[]",
+        "internalType": "struct CreditVault.Tier[]",
+        "components": [
+          {
+            "name": "minAmountWei",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "stepDownBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "tiers",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "minAmountWei",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "stepDownBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tiersLength",
+    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -373,6 +435,12 @@
         "internalType": "uint256"
       }
     ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TiersUpdated",
+    "inputs": [],
     "anonymous": false
   },
   {

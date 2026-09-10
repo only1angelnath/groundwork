@@ -1,5 +1,5 @@
 """
-Groundwork API — Phase 3, extended Phase 6.5 with bill upload/validator
+Groundwork API entrypoint — Phase 3 added the core auth/dashboard/score-history
 routes, extended Phase 8 with the mocked KYC gate, extended Phase 8
 follow-up #3 with in-app notifications.
 """
@@ -27,8 +27,12 @@ _allowed_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Every route in this API is GET or POST — no PUT/PATCH/DELETE exists
+    # anywhere in routers/, so there's nothing gained by allowing the rest.
+    allow_methods=["GET", "POST"],
+    # Authorization carries the SIWE-issued bearer token; Content-Type is
+    # needed for both JSON bodies and multipart file uploads.
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)

@@ -27,6 +27,13 @@ lets /upload and /borrow gate on it without forcing a SIWE sign-in just to
 (get_current_wallet) — submitting proves the caller controls the wallet
 the (mocked) identity is attached to, reviewing proves the caller is the
 one authorized validator.
+
+Upload content-type/size validation and storage-path generation are
+delegated to uploads.py (shared with bills.py) — see that module's
+docstring for why the client-supplied filename is never trusted. That
+matters more here than for bill documents: this bucket holds a (mocked,
+but real-looking) photo ID, and the validator opens it directly via a
+signed URL to review it.
 """
 from __future__ import annotations
 
@@ -41,6 +48,7 @@ from chain_bills import get_validator_address
 from db import get_service_client
 from notifications import create_notification
 from telegram_notify import notify_validator
+from uploads import generate_storage_path, read_and_validate_upload
 
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
 
@@ -89,19 +97,19 @@ async def submit_kyc(
     except ValueError:
         raise HTTPException(status_code=400, detail="date_of_birth must be YYYY-MM-DD")
 
-    contents = await id_document.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="ID document is empty")
+    contents, extension = await read_and_validate_upload(id_document)
 
     wallet = current_wallet.lower()
-    storage_path = f"{wallet}/{id_document.filename}"
+    # Server-generated path — never derived from the client-supplied
+    # filename (see uploads.py's docstring for why).
+    storage_path = generate_storage_path(extension, wallet)
 
     client = get_service_client()
     client.storage.from_(BUCKET).upload(
         storage_path,
         contents,
         {
-            "content-type": id_document.content_type or "application/octet-stream",
+            "content-type": id_document.content_type,
             "upsert": "true",
         },
     )

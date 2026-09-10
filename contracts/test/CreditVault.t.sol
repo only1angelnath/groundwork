@@ -77,22 +77,40 @@ contract CreditVaultTest is Test {
         assertEq(vault.requiredCollateralRatioOf(payer), vault.STARTING_COLLATERAL_RATIO_BPS());
     }
 
+    /// @notice Security-audit follow-up (Sept 2026): recordVerifiedPayment used to
+    /// apply a flat STEP_DOWN_BPS to every payment regardless of amount. It now
+    /// looks up a tier by amount instead — 1 ether lands in the catch-all tier
+    /// (index 3, the lowest-threshold entry), not the old flat rate, so the
+    /// expected step is read from the vault's actual configured tier rather than
+    /// hardcoded, in case the defaults are ever retuned via setTiers.
     function test_FirstPayment_StepsRatioDown() public {
         vm.prank(asc);
         vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
 
+        (, uint256 expectedStepDown) = vault.tiers(3);
         assertEq(vault.scoreOf(payer), 1);
         assertEq(
             vault.requiredCollateralRatioOf(payer),
-            vault.STARTING_COLLATERAL_RATIO_BPS() - vault.STEP_DOWN_BPS()
+            vault.STARTING_COLLATERAL_RATIO_BPS() - expectedStepDown
         );
     }
 
     /// @notice The exact boundary the roadmap flagged: repeated payments must step the
     /// ratio down to precisely the floor and never below it, even with an extra payment
     /// past the point where it would otherwise go under.
+    ///
+    /// Payment count to reach the floor is derived from the vault's actual
+    /// configured catch-all step (not hardcoded), since 1 ether payments land in
+    /// that tier — this stays correct if the tier defaults are ever retuned via
+    /// setTiers, as long as the step still divides the starting-to-floor gap
+    /// evenly (enforced below rather than assumed).
     function test_RepeatedPayments_FloorAtExactly11000Bps() public {
-        for (uint256 i = 0; i < 10; i++) {
+        (, uint256 stepDown) = vault.tiers(3);
+        uint256 gap = vault.STARTING_COLLATERAL_RATIO_BPS() - vault.FLOOR_COLLATERAL_RATIO_BPS();
+        require(gap % stepDown == 0, "test setup: step size must divide the starting-to-floor gap evenly");
+        uint256 paymentsToFloor = gap / stepDown;
+
+        for (uint256 i = 0; i < paymentsToFloor; i++) {
             vm.prank(asc);
             vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
         }
@@ -100,7 +118,7 @@ contract CreditVaultTest is Test {
 
         CreditVault freshVault = new CreditVault(owner);
         freshVault.addRecorder(asc);
-        for (uint256 i = 0; i < 9; i++) {
+        for (uint256 i = 0; i < paymentsToFloor - 1; i++) {
             vm.prank(asc);
             freshVault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
         }
@@ -108,12 +126,132 @@ contract CreditVaultTest is Test {
     }
 
     function test_RepeatedPayments_NeverGoBelowFloor() public {
+        // 20 payments at 1 ether (catch-all tier, currently -1000bps/payment)
+        // clears the floor with room to spare (reached at 19 payments as of the
+        // current tier defaults — see test_RepeatedPayments_FloorAtExactly11000Bps).
         for (uint256 i = 0; i < 20; i++) {
             vm.prank(asc);
             vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
         }
         assertEq(vault.requiredCollateralRatioOf(payer), vault.FLOOR_COLLATERAL_RATIO_BPS());
         assertEq(vault.scoreOf(payer), 20);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tiered step-down (security-audit follow-up, Sept 2026)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_TiersLength_MatchesConstructorDefaults() public view {
+        assertEq(vault.tiersLength(), 4);
+    }
+
+    function test_TierSelection_LargeAmountGetsBiggestStepDown() public {
+        address bigPayer = address(0xB16);
+        vm.prank(asc);
+        vault.recordVerifiedPayment(bigPayer, 1_000 ether, block.timestamp);
+
+        (, uint256 expectedStepDown) = vault.tiers(0); // largest-threshold tier
+        assertEq(
+            vault.requiredCollateralRatioOf(bigPayer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - expectedStepDown
+        );
+    }
+
+    function test_TierSelection_TypicalAmountGetsMidStepDown() public {
+        address midPayer = address(0x7171);
+        vm.prank(asc);
+        vault.recordVerifiedPayment(midPayer, 100 ether, block.timestamp);
+
+        (, uint256 expectedStepDown) = vault.tiers(1);
+        assertEq(
+            vault.requiredCollateralRatioOf(midPayer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - expectedStepDown
+        );
+    }
+
+    function test_TierSelection_SmallAmountGetsSmallerStepDown() public {
+        address smallPayer = address(0x5AA1);
+        vm.prank(asc);
+        vault.recordVerifiedPayment(smallPayer, 10 ether, block.timestamp);
+
+        (, uint256 expectedStepDown) = vault.tiers(2);
+        assertEq(
+            vault.requiredCollateralRatioOf(smallPayer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - expectedStepDown
+        );
+    }
+
+    function test_TierSelection_DustAmountFallsToCatchAllTier() public {
+        address dustPayer = address(0xD057);
+        vm.prank(asc);
+        vault.recordVerifiedPayment(dustPayer, 1 wei, block.timestamp);
+
+        (, uint256 expectedStepDown) = vault.tiers(3);
+        assertEq(
+            vault.requiredCollateralRatioOf(dustPayer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - expectedStepDown
+        );
+    }
+
+    function test_TierSelection_ExactThresholdIsInclusive() public {
+        // amount == a tier's minAmountWei exactly must match that tier, not the
+        // one below it (_stepDownFor uses >=, not >).
+        address exactPayer = address(0xE001);
+        vm.prank(asc);
+        vault.recordVerifiedPayment(exactPayer, 100 ether, block.timestamp);
+
+        (, uint256 typicalStepDown) = vault.tiers(1);
+        assertEq(
+            vault.requiredCollateralRatioOf(exactPayer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - typicalStepDown
+        );
+    }
+
+    function test_SetTiers_OnlyOwner() public {
+        CreditVault.Tier[] memory newTiers = new CreditVault.Tier[](1);
+        newTiers[0] = CreditVault.Tier({minAmountWei: 0, stepDownBps: 5_000});
+
+        vm.prank(payer);
+        vm.expectRevert();
+        vault.setTiers(newTiers);
+    }
+
+    function test_SetTiers_RejectsEmptyArray() public {
+        CreditVault.Tier[] memory empty = new CreditVault.Tier[](0);
+        vm.expectRevert("CreditVault: at least one tier required");
+        vault.setTiers(empty);
+    }
+
+    function test_SetTiers_RejectsNonZeroLastTier() public {
+        CreditVault.Tier[] memory newTiers = new CreditVault.Tier[](1);
+        newTiers[0] = CreditVault.Tier({minAmountWei: 1 ether, stepDownBps: 5_000});
+
+        vm.expectRevert("CreditVault: last tier must start at 0");
+        vault.setTiers(newTiers);
+    }
+
+    function test_SetTiers_RejectsNonDescendingOrder() public {
+        CreditVault.Tier[] memory newTiers = new CreditVault.Tier[](3);
+        newTiers[0] = CreditVault.Tier({minAmountWei: 1 ether, stepDownBps: 3_000});
+        newTiers[1] = CreditVault.Tier({minAmountWei: 2 ether, stepDownBps: 1_500}); // not below entry 0
+        newTiers[2] = CreditVault.Tier({minAmountWei: 0, stepDownBps: 500});
+
+        vm.expectRevert("CreditVault: tiers must be strictly descending");
+        vault.setTiers(newTiers);
+    }
+
+    function test_SetTiers_UpdatesAppliedStepDown() public {
+        CreditVault.Tier[] memory newTiers = new CreditVault.Tier[](1);
+        newTiers[0] = CreditVault.Tier({minAmountWei: 0, stepDownBps: 5_000});
+        vault.setTiers(newTiers);
+        assertEq(vault.tiersLength(), 1);
+
+        vm.prank(asc);
+        vault.recordVerifiedPayment(payer, 1 ether, block.timestamp);
+        assertEq(
+            vault.requiredCollateralRatioOf(payer),
+            vault.STARTING_COLLATERAL_RATIO_BPS() - 5_000
+        );
     }
 
     function test_Borrow_RevertsOnInsufficientCollateral() public {
