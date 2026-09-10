@@ -43,7 +43,12 @@ from uploads import generate_storage_path, read_and_validate_upload
 router = APIRouter(prefix="/api", tags=["bills"])
 
 BUCKET = "bill-documents"
-SIGNED_URL_TTL_SECONDS = 300
+# 30 minutes, not 5 — this is generated once when the validator's list loads
+# (GET /api/validator/all-bills), not on-demand per click, so it needs to
+# outlive a realistic unhurried review session, not just the time to load
+# the page. Dry-run finding (Sept 2026): 5 minutes was too tight and expired
+# mid-review with a raw Supabase "exp claim timestamp check failed" error.
+SIGNED_URL_TTL_SECONDS = 1800
 
 STATUS_LABELS = {0: "pending", 1: "approved", 2: "rejected"}
 

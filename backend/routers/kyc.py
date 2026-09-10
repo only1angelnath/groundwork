@@ -53,7 +53,11 @@ from uploads import generate_storage_path, read_and_validate_upload
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
 
 BUCKET = "kyc-documents"
-SIGNED_URL_TTL_SECONDS = 300
+# 30 minutes, not 5 — same reasoning as backend/routers/bills.py's identical
+# constant: generated once when the validator's list loads, needs to outlive
+# a realistic review session. Dry-run finding (Sept 2026): 5 minutes expired
+# mid-review with a raw Supabase "exp claim timestamp check failed" error.
+SIGNED_URL_TTL_SECONDS = 1800
 
 
 def _document_url(client, storage_path: str | None) -> str | None:
