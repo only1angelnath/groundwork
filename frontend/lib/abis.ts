@@ -164,3 +164,32 @@ export const BILL_VALIDATOR_ABI = [
 export const BILL_VALIDATOR_ADDRESS = (process.env
   .NEXT_PUBLIC_BILL_VALIDATOR_ADDRESS ??
   "0xB44C6EB9fd286Ec9dc87ECc23A05b876404D6C94") as `0x${string}`;
+
+// SoulboundBillRecord — the non-transferable ERC-721 minted by BillValidator
+// on approval (see contracts/src/SoulboundBillRecord.sol). Deliberately NOT
+// enumerable (no tokenOfOwnerByIndex) — a wallet's receipts are read instead
+// via RecordMinted's indexed `payer` topic, filtered client-side with
+// getContractEvents (see lib/useSbtReceipts.ts). balanceOf is kept as a
+// reliable fallback count if the log fetch ever fails.
+export const SOULBOUND_BILL_RECORD_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "event",
+    name: "RecordMinted",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "payer", type: "address", indexed: true },
+      { name: "billId", type: "uint256", indexed: true },
+      { name: "claimedAmount", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+export const SOULBOUND_BILL_RECORD_ADDRESS =
+  "0x19B9BC1905Fba793A4ff469262B2626fd74c6F6f" as `0x${string}`;

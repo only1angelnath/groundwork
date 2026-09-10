@@ -305,16 +305,29 @@ function UploadFlow() {
             {myBills.map((bill) => (
               <div
                 key={bill.bill_id}
-                className="flex items-center justify-between rounded-xl border border-glass-border bg-glass-100 px-4 py-3 backdrop-blur-md"
+                className="flex flex-col gap-1 rounded-xl border border-glass-border bg-glass-100 px-4 py-3 backdrop-blur-md"
               >
-                <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-500">
-                  Bill #{bill.bill_id}
-                </span>
-                <span
-                  className={`font-[family-name:var(--font-data)] text-sm font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
-                >
-                  {bill.status}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="font-[family-name:var(--font-data)] text-sm text-warmgray-500">
+                    Bill #{bill.bill_id}
+                  </span>
+                  <span
+                    className={`font-[family-name:var(--font-data)] text-sm font-semibold capitalize ${STATUS_STYLES[bill.status]}`}
+                  >
+                    {bill.status}
+                  </span>
+                </div>
+                {bill.status === "approved" && (
+                  <p className="text-xs text-warmgray-300">
+                    ✓ Permanent on-chain receipt minted —{" "}
+                    <a
+                      href="/dashboard"
+                      className="underline decoration-pink-400 underline-offset-2 transition-colors hover:text-pink-500"
+                    >
+                      view on your dashboard
+                    </a>
+                  </p>
+                )}
               </div>
             ))}
           </div>
