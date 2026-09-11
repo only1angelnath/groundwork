@@ -1,7 +1,5 @@
 # Attestcoin Protocol Integration — Technical Documentation
 
-*(Required submission document.)*
-
 ## Summary
 
 Groundwork uses the Attestcoin Protocol to trustlessly verify real-world
@@ -13,14 +11,14 @@ an otherwise-uncollateralized micro-loan.
 
 **Current (live in production):**
 
-| Contract | Chain | Address |
-|---|---|---|
-| `BillPay.sol` | Ethereum Sepolia | `0xF0572C9E81943374f8A707F6821710D2262E8B22` |
-| `EvmV1Decoder` library | Creditcoin CC3 Testnet | `0x16b79d87f11883bb57a3d42480804B637e5a2f8D` |
-| `CreditVault.sol` (v4, tiered step-down) | Creditcoin CC3 Testnet | `0x7C458Ef4347D95449c021350e9FdCcb548474Bf4` |
+| Contract                                               | Chain                  | Address                                        |
+| ------------------------------------------------------ | ---------------------- | ---------------------------------------------- |
+| `BillPay.sol`                                        | Ethereum Sepolia       | `0xF0572C9E81943374f8A707F6821710D2262E8B22` |
+| `EvmV1Decoder` library                               | Creditcoin CC3 Testnet | `0x16b79d87f11883bb57a3d42480804B637e5a2f8D` |
+| `CreditVault.sol` (v4, tiered step-down)             | Creditcoin CC3 Testnet | `0x7C458Ef4347D95449c021350e9FdCcb548474Bf4` |
 | `GroundworkASC.sol` (redeployed, points at v4 vault) | Creditcoin CC3 Testnet | `0xfc03a3912a8245AEDbb94a9F8459Ce576cfD8675` |
 | `BillValidator.sol` (redeployed, points at v4 vault) | Creditcoin CC3 Testnet | `0xB44C6EB9fd286Ec9dc87ECc23A05b876404D6C94` |
-| `SoulboundBillRecord.sol` | Creditcoin CC3 Testnet | `0x19B9BC1905Fba793A4ff469262B2626fd74c6F6f` |
+| `SoulboundBillRecord.sol`                            | Creditcoin CC3 Testnet | `0x19B9BC1905Fba793A4ff469262B2626fd74c6F6f` |
 
 `CreditVault` v3 replaced its single-recorder (`asc`) design with a
 `mapping(address => bool) isRecorder` set plus
@@ -47,15 +45,15 @@ new `BillValidator`).
 
 **Superseded (dead — kept here only for the record):**
 
-| Contract | Chain | Address |
-|---|---|---|
-| `CreditVault.sol` (v3, multi-recorder) | Creditcoin CC3 Testnet | `0xe5233ee60688A151AB47F788E164eA9BB013AB05` |
-| `GroundworkASC.sol` (v3-wired) | Creditcoin CC3 Testnet | `0x182F1DbfE77784bC2f575233829A253c4bCC7D16` |
-| `BillValidator.sol` (v3-vault-wired) | Creditcoin CC3 Testnet | `0x63E11DFA6E0141d52ceB0Bac88B41aAf273e9c28` |
+| Contract                                   | Chain                  | Address                                        |
+| ------------------------------------------ | ---------------------- | ---------------------------------------------- |
+| `CreditVault.sol` (v3, multi-recorder)   | Creditcoin CC3 Testnet | `0xe5233ee60688A151AB47F788E164eA9BB013AB05` |
+| `GroundworkASC.sol` (v3-wired)           | Creditcoin CC3 Testnet | `0x182F1DbfE77784bC2f575233829A253c4bCC7D16` |
+| `BillValidator.sol` (v3-vault-wired)     | Creditcoin CC3 Testnet | `0x63E11DFA6E0141d52ceB0Bac88B41aAf273e9c28` |
 | `CreditVault.sol` (v2, adds `repay()`) | Creditcoin CC3 Testnet | `0x21209299B5B21F0f599f19aF5C1a9D8EF96cC74A` |
-| `GroundworkASC.sol` (v2-wired) | Creditcoin CC3 Testnet | `0x77e07d8626E506498D01F8B504305C856473A6b4` |
-| `CreditVault.sol` (v1) | Creditcoin CC3 Testnet | `0xF0572C9E81943374f8A707F6821710D2262E8B22` |
-| `GroundworkASC.sol` (v1) | Creditcoin CC3 Testnet | `0x9fa9Cd49d73449A5AC03E7d957048675C6AC04bE` |
+| `GroundworkASC.sol` (v2-wired)           | Creditcoin CC3 Testnet | `0x77e07d8626E506498D01F8B504305C856473A6b4` |
+| `CreditVault.sol` (v1)                   | Creditcoin CC3 Testnet | `0xF0572C9E81943374f8A707F6821710D2262E8B22` |
+| `GroundworkASC.sol` (v1)                 | Creditcoin CC3 Testnet | `0x9fa9Cd49d73449A5AC03E7d957048675C6AC04bE` |
 
 (v1 `BillPay` and v1 `CreditVault` sharing an address is not a
 collision — `CREATE` addresses depend only on `sender + nonce`, not chain
@@ -70,6 +68,7 @@ trusted from docs.
 ## Source chain event
 
 `BillPay.sol` (Sepolia) emits:
+
 ```solidity
 event BillPaid(address indexed payer, address indexed payee, uint256 amount, uint256 timestamp);
 ```
@@ -132,8 +131,7 @@ this flow many times against the (then-current) contracts, including
 recovering cleanly from two real production incidents: a worker bug that
 stalled the scan cursor for two days (an RPC mempool-duplicate error
 mishandled as fatal), and a Supabase dedup-key collision across a contract
-redeploy (both documented in `docs/HANDOFF.md`). Both are fixed and the
-pipeline has since processed a real backlog and multiple fresh payments
+redeploy. Both are fixed and the pipeline has since processed a real backlog and multiple fresh payments
 cleanly end-to-end, including reaching the 110% collateral-ratio floor on
 a real test wallet.
 
@@ -151,8 +149,7 @@ Real engineering issues discovered and resolved during this process:
   putting the library's address in `foundry.toml`'s
   `[profile.default].libraries` instead, confirmed by reproducing both the
   failure and the fix locally against `anvil` before using it for real.
-- The RPC node occasionally returns `{"code": -32603, "message": "already
-  known"}` when broadcasting — a mempool duplicate-transaction race
+- The RPC node occasionally returns `{"code": -32603, "message": "already known"}` when broadcasting — a mempool duplicate-transaction race
   (nonce visibility lag across a public RPC's nodes), not a real failure.
   The worker now waits for the already-pending transaction's receipt
   instead of treating this as fatal.
